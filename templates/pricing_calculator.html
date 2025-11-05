@@ -1,0 +1,669 @@
+{% extends "base.html" %}
+
+{% block title %}Pricing Calculator{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-calculator"></i> Tuition Calculator</h5>
+            </div>
+            <div class="card-body">
+                <form id="pricingForm">
+                    <!-- Core Plans Section -->
+                    <div class="mb-4">
+                        <h6><i class="bi bi-star-fill"></i> Step 1: Select a Core Plan</h6>
+                        {% if not core_plans %}
+                        <div class="alert alert-warning">No core plans available</div>
+                        {% else %}
+                        <div class="list-group">
+                            {% for plan in core_plans %}
+                            <label class="list-group-item list-group-item-action">
+                                <div class="d-flex w-100 justify-content-between align-items-center">
+                                    <div class="form-check">
+                                        <input class="form-check-input core-plan-radio" type="radio"
+                                               name="core_plan" value="{{ plan.id }}"
+                                               data-price="{{ plan.base_price }}"
+                                               data-period="{{ plan.billing_period }}"
+                                               data-days-count="{{ plan.get_days_count() }}"
+                                               id="plan_{{ plan.id }}">
+                                        <label class="form-check-label" for="plan_{{ plan.id }}">
+                                            <strong>{{ plan.name }}</strong>
+                                            {% if plan.description %}
+                                            <br><small class="text-muted">{{ plan.description }}</small>
+                                            {% endif %}
+                                            <br><small class="text-muted">
+                                                {{ plan.get_schedule_display() }}
+                                            </small>
+                                        </label>
+                                    </div>
+                                    <span class="badge bg-primary fs-6">
+                                        ${{ "%.2f"|format(plan.base_price) }}/{{ plan.billing_period }}
+                                    </span>
+                                </div>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Extended Care Section -->
+                    <div class="mb-4" id="extendedCareSection" style="display: none;">
+                        <h6>
+                            <i class="bi bi-clock"></i> Step 2: Extended Care (Optional)
+                            <span class="badge bg-success ms-2" id="extendedCareRateBadge" style="display: none;"></span>
+                        </h6>
+                        <div class="card">
+                            <div class="card-body">
+                                <p class="text-muted mb-1">
+                                    Core plan time: <strong id="corePlanTime"></strong>
+                                </p>
+                                <p class="text-muted mb-3" id="extendedCareRate" style="display: none;">
+                                    Extended care rate: <strong id="extendedCareRateDisplay"></strong>
+                                </p>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="extendedStartTime" class="form-label">Drop-off Time</label>
+                                        <input type="time" class="form-control" id="extendedStartTime">
+                                        <small class="form-text text-muted">Choose earlier than core plan start</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="extendedEndTime" class="form-label">Pick-up Time</label>
+                                        <input type="time" class="form-control" id="extendedEndTime">
+                                        <small class="form-text text-muted">Choose later than core plan end</small>
+                                    </div>
+                                </div>
+                                <div id="extendedCareCalculation" class="alert alert-info" style="display: none;">
+                                    <strong>Extended Care:</strong> <span id="extendedCareHours"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Add-Ons Section -->
+                    {% if add_ons %}
+                    <div class="mb-4">
+                        <h6><i class="bi bi-plus-square"></i> Step 3: Select Add-Ons (Optional)</h6>
+                        <div class="accordion" id="addonsAccordion">
+                            {% for addon in add_ons %}
+                            {% if not addon.is_extended_care %}
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button"
+                                            data-bs-toggle="collapse" data-bs-target="#addon_{{ addon.id }}">
+                                        {{ addon.name }}
+                                        <span class="badge bg-success ms-2">
+                                            {% if addon.pricing_type == 'per_day' %}
+                                            ${{ "%.2f"|format(addon.price) }}/day
+                                            {% elif addon.pricing_type == 'time_based' %}
+                                            ${{ "%.2f"|format(addon.price) }}/{{ addon.minutes_unit }}min
+                                            {% else %}
+                                            ${{ "%.2f"|format(addon.price) }} one-time
+                                            {% endif %}
+                                        </span>
+                                    </button>
+                                </h2>
+                                <div id="addon_{{ addon.id }}" class="accordion-collapse collapse">
+                                    <div class="accordion-body">
+                                        {% if addon.description %}
+                                        <p class="text-muted mb-3">{{ addon.description }}</p>
+                                        {% endif %}
+
+                                        <div class="form-check mb-3">
+                                            <input class="form-check-input addon-checkbox" type="checkbox"
+                                                   data-addon-id="{{ addon.id }}"
+                                                   data-pricing-type="{{ addon.pricing_type }}"
+                                                   data-price="{{ addon.price }}"
+                                                   data-minutes-unit="{{ addon.minutes_unit }}"
+                                                   id="addon_check_{{ addon.id }}">
+                                            <label class="form-check-label" for="addon_check_{{ addon.id }}">
+                                                Add this service
+                                            </label>
+                                        </div>
+
+                                        <!-- Quantity/Input Fields -->
+                                        <div class="addon-inputs" id="addon_input_{{ addon.id }}" style="display: none;">
+                                            {% if addon.pricing_type == 'per_day' %}
+                                            <div class="mb-2">
+                                                <label class="form-label">Days per week</label>
+                                                <input type="number" class="form-control addon-quantity"
+                                                       data-addon-id="{{ addon.id }}"
+                                                       min="1" max="5" value="1">
+                                            </div>
+                                            {% elif addon.pricing_type == 'time_based' %}
+                                            <div class="mb-2">
+                                                <label class="form-label">Total minutes needed</label>
+                                                <input type="number" class="form-control addon-quantity"
+                                                       data-addon-id="{{ addon.id }}"
+                                                       min="{{ addon.minutes_unit }}"
+                                                       step="{{ addon.minutes_unit }}"
+                                                       value="{{ addon.minutes_unit }}">
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- One-Time Fees Section -->
+                    {% if fees %}
+                    <div class="mb-4">
+                        <h6><i class="bi bi-receipt"></i> Step 4: Select Applicable Fees (Optional)</h6>
+                        <div class="list-group">
+                            {% for fee in fees %}
+                            <label class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between align-items-center">
+                                    <div class="form-check">
+                                        <input class="form-check-input fee-checkbox" type="checkbox"
+                                               value="{{ fee.id }}"
+                                               data-amount="{{ fee.amount }}"
+                                               id="fee_{{ fee.id }}">
+                                        <label class="form-check-label" for="fee_{{ fee.id }}">
+                                            <strong>{{ fee.name }}</strong>
+                                            <span class="badge bg-secondary">{{ fee.fee_type|title }}</span>
+                                            {% if fee.is_refundable %}
+                                            <span class="badge bg-success">Refundable</span>
+                                            {% endif %}
+                                            {% if fee.description %}
+                                            <br><small class="text-muted">{{ fee.description }}</small>
+                                            {% endif %}
+                                        </label>
+                                    </div>
+                                    <span class="badge bg-warning text-dark fs-6">
+                                        ${{ "%.2f"|format(fee.amount) }}
+                                    </span>
+                                </div>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Discounts Section -->
+                    {% if discounts %}
+                    <div class="mb-4">
+                        <h6><i class="bi bi-percent"></i> Step 5: Apply Discounts (Optional)</h6>
+                        <div class="list-group">
+                            {% for discount in discounts %}
+                            <label class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between align-items-center">
+                                    <div class="form-check">
+                                        <input class="form-check-input discount-checkbox" type="checkbox"
+                                               value="{{ discount.id }}"
+                                               data-type="{{ discount.discount_type }}"
+                                               data-amount="{{ discount.amount }}"
+                                               data-applies-to="{{ discount.applies_to }}"
+                                               id="discount_{{ discount.id }}">
+                                        <label class="form-check-label" for="discount_{{ discount.id }}">
+                                            <strong>{{ discount.name }}</strong>
+                                            <span class="badge bg-info">{{ discount.applies_to|replace('_', ' ')|title }}</span>
+                                            {% if discount.description %}
+                                            <br><small class="text-muted">{{ discount.description }}</small>
+                                            {% endif %}
+                                            {% if discount.conditions %}
+                                            <br><small class="text-muted"><em>Conditions: {{ discount.conditions }}</em></small>
+                                            {% endif %}
+                                        </label>
+                                    </div>
+                                    <span class="badge bg-danger fs-6">
+                                        {% if discount.discount_type == 'percentage' %}
+                                        -{{ discount.amount }}%
+                                        {% else %}
+                                        -${{ "%.2f"|format(discount.amount) }}
+                                        {% endif %}
+                                    </span>
+                                </div>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Sidebar -->
+    <div class="col-lg-4">
+        <div class="card sticky-top" style="top: 20px;">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-receipt-cutoff"></i> Price Summary</h5>
+            </div>
+            <div class="card-body">
+                <div id="summary-content">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        Select a core plan to see your total
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedCorePlan = null;
+let selectedAddons = [];
+let selectedFees = [];
+let selectedDiscounts = [];
+let extendedCareHours = 0;
+let extendedCareRate = 0; // Will be set from add-ons
+
+// Find extended care rate from add-ons on page load
+{% for addon in add_ons %}
+{% if addon.is_extended_care and addon.pricing_type == 'time_based' %}
+extendedCareRate = {{ addon.price }};
+{% endif %}
+{% endfor %}
+
+// Helper function to convert time string (like "9:00 AM") to minutes since midnight
+function timeToMinutes(timeStr) {
+    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (!match) return 0;
+
+    let hours = parseInt(match[1]);
+    const minutes = parseInt(match[2]);
+    const period = match[3].toUpperCase();
+
+    if (period === 'PM' && hours !== 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+
+    return hours * 60 + minutes;
+}
+
+// Core plan selection
+document.querySelectorAll('.core-plan-radio').forEach(radio => {
+    radio.addEventListener('change', function() {
+        const label = document.querySelector(`label[for="${this.id}"]`);
+        const scheduleText = label.textContent;
+
+        // Extract time range from the schedule text
+        const timeMatch = scheduleText.match(/(\d+:\d+\s*[AP]M)\s*-\s*(\d+:\d+\s*[AP]M)/);
+
+        selectedCorePlan = {
+            id: this.value,
+            price: parseFloat(this.dataset.price),
+            period: this.dataset.period,
+            daysCount: parseInt(this.dataset.daysCount),
+            startTime: timeMatch ? timeMatch[1] : '9:00 AM',
+            endTime: timeMatch ? timeMatch[2] : '3:00 PM'
+        };
+
+        // Show extended care section and set core plan time display
+        document.getElementById('extendedCareSection').style.display = 'block';
+        document.getElementById('corePlanTime').textContent = `${selectedCorePlan.startTime} - ${selectedCorePlan.endTime}`;
+
+        // Show extended care rate if available
+        if (extendedCareRate > 0) {
+            document.getElementById('extendedCareRate').style.display = 'block';
+            document.getElementById('extendedCareRateDisplay').textContent = `$${extendedCareRate.toFixed(2)}/hour`;
+            document.getElementById('extendedCareRateBadge').style.display = 'inline';
+            document.getElementById('extendedCareRateBadge').textContent = `$${(extendedCareRate / 60).toFixed(2)}/min`;
+        }
+
+        // Set default times in extended care inputs
+        document.getElementById('extendedStartTime').value = convertTo24Hour(selectedCorePlan.startTime);
+        document.getElementById('extendedEndTime').value = convertTo24Hour(selectedCorePlan.endTime);
+
+        // Update max days for per_day add-ons
+        document.querySelectorAll('.addon-quantity').forEach(input => {
+            const checkbox = document.querySelector(`.addon-checkbox[data-addon-id="${input.dataset.addonId}"]`);
+            if (checkbox && checkbox.dataset.pricingType === 'per_day') {
+                input.max = selectedCorePlan.daysCount;
+                if (parseInt(input.value) > selectedCorePlan.daysCount) {
+                    input.value = selectedCorePlan.daysCount;
+                }
+            }
+        });
+
+        calculateTotal();
+    });
+});
+
+// Convert 12-hour time to 24-hour format for input[type="time"]
+function convertTo24Hour(time12h) {
+    const match = time12h.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (!match) return '09:00';
+
+    let hours = parseInt(match[1]);
+    const minutes = match[2];
+    const period = match[3].toUpperCase();
+
+    if (period === 'PM' && hours !== 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+
+    return `${String(hours).padStart(2, '0')}:${minutes}`;
+}
+
+// Extended care time inputs
+document.getElementById('extendedStartTime').addEventListener('change', calculateExtendedCare);
+document.getElementById('extendedEndTime').addEventListener('change', calculateExtendedCare);
+
+function calculateExtendedCare() {
+    if (!selectedCorePlan) return;
+
+    const inputStart = document.getElementById('extendedStartTime').value;
+    const inputEnd = document.getElementById('extendedEndTime').value;
+
+    if (!inputStart || !inputEnd) return;
+
+    // Convert to minutes
+    const [inputStartHour, inputStartMin] = inputStart.split(':').map(Number);
+    const [inputEndHour, inputEndMin] = inputEnd.split(':').map(Number);
+
+    const inputStartMinutes = inputStartHour * 60 + inputStartMin;
+    const inputEndMinutes = inputEndHour * 60 + inputEndMin;
+
+    const coreStartMinutes = timeToMinutes(selectedCorePlan.startTime);
+    const coreEndMinutes = timeToMinutes(selectedCorePlan.endTime);
+
+    // Calculate extended hours
+    let morningHours = 0;
+    let eveningHours = 0;
+
+    if (inputStartMinutes < coreStartMinutes) {
+        morningHours = (coreStartMinutes - inputStartMinutes) / 60;
+    }
+
+    if (inputEndMinutes > coreEndMinutes) {
+        eveningHours = (inputEndMinutes - coreEndMinutes) / 60;
+    }
+
+    extendedCareHours = morningHours + eveningHours;
+
+    if (extendedCareHours > 0) {
+        document.getElementById('extendedCareCalculation').style.display = 'block';
+
+        // Format hours and minutes
+        const totalMinutes = Math.round(extendedCareHours * 60);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+
+        const morningMinutes = Math.round(morningHours * 60);
+        const morningHrs = Math.floor(morningMinutes / 60);
+        const morningMins = morningMinutes % 60;
+
+        const eveningMinutes = Math.round(eveningHours * 60);
+        const eveningHrs = Math.floor(eveningMinutes / 60);
+        const eveningMins = eveningMinutes % 60;
+
+        let timeDisplay = '';
+        if (hours > 0) timeDisplay += `${hours} hour${hours !== 1 ? 's' : ''}`;
+        if (minutes > 0) timeDisplay += ` ${minutes} minute${minutes !== 1 ? 's' : ''}`;
+
+        let beforeDisplay = '';
+        if (morningHrs > 0) beforeDisplay += `${morningHrs} hr${morningHrs !== 1 ? 's' : ''}`;
+        if (morningMins > 0) beforeDisplay += ` ${morningMins} min`;
+        if (!beforeDisplay) beforeDisplay = '0 min';
+
+        let afterDisplay = '';
+        if (eveningHrs > 0) afterDisplay += `${eveningHrs} hr${eveningHrs !== 1 ? 's' : ''}`;
+        if (eveningMins > 0) afterDisplay += ` ${eveningMins} min`;
+        if (!afterDisplay) afterDisplay = '0 min';
+
+        document.getElementById('extendedCareHours').textContent =
+            `${timeDisplay} (${beforeDisplay} before + ${afterDisplay} after)`;
+    } else {
+        document.getElementById('extendedCareCalculation').style.display = 'none';
+    }
+
+    calculateTotal();
+}
+
+calculateTotal();
+
+// Add-on checkboxes
+document.querySelectorAll('.addon-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+        const addonId = this.dataset.addonId;
+        const inputDiv = document.getElementById(`addon_input_${addonId}`);
+
+        if (this.checked) {
+            inputDiv.style.display = 'block';
+            updateAddon(addonId);
+        } else {
+            inputDiv.style.display = 'none';
+            selectedAddons = selectedAddons.filter(a => a.id !== addonId);
+            calculateTotal();
+        }
+    });
+});
+
+// Add-on quantity inputs
+document.querySelectorAll('.addon-quantity').forEach(input => {
+    input.addEventListener('input', function() {
+        updateAddon(this.dataset.addonId);
+    });
+});
+
+function updateAddon(addonId) {
+    const checkbox = document.querySelector(`.addon-checkbox[data-addon-id="${addonId}"]`);
+    if (!checkbox.checked) return;
+
+    const pricingType = checkbox.dataset.pricingType;
+    const basePrice = parseFloat(checkbox.dataset.price);
+    const minutesUnit = parseInt(checkbox.dataset.minutesUnit);
+
+    let totalPrice = basePrice;
+    let quantity = 1;
+
+    const quantityInput = document.querySelector(`.addon-quantity[data-addon-id="${addonId}"]`);
+    if (quantityInput) {
+        quantity = parseInt(quantityInput.value) || 1;
+    }
+
+    if (pricingType === 'per_day') {
+        // Per day pricing - multiply by weeks in billing period
+        const weeksInPeriod = selectedCorePlan?.period === 'monthly' ? 4 : 1;
+        totalPrice = basePrice * quantity * weeksInPeriod;
+    } else if (pricingType === 'time_based') {
+        // Time-based pricing - calculate based on minutes
+        const units = Math.ceil(quantity / minutesUnit);
+        totalPrice = basePrice * units;
+    }
+    // one_time stays as base price
+
+    // Update or add to selectedAddons
+    const existingIndex = selectedAddons.findIndex(a => a.id === addonId);
+    const addon = {
+        id: addonId,
+        price: totalPrice,
+        quantity: quantity,
+        type: pricingType
+    };
+
+    if (existingIndex >= 0) {
+        selectedAddons[existingIndex] = addon;
+    } else {
+        selectedAddons.push(addon);
+    }
+
+    calculateTotal();
+}
+
+// Fee checkboxes
+document.querySelectorAll('.fee-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+        if (this.checked) {
+            selectedFees.push({
+                id: this.value,
+                amount: parseFloat(this.dataset.amount)
+            });
+        } else {
+            selectedFees = selectedFees.filter(f => f.id !== this.value);
+        }
+        calculateTotal();
+    });
+});
+
+// Discount checkboxes
+document.querySelectorAll('.discount-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+        if (this.checked) {
+            selectedDiscounts.push({
+                id: this.value,
+                type: this.dataset.type,
+                amount: parseFloat(this.dataset.amount),
+                appliesTo: this.dataset.appliesTo
+            });
+        } else {
+            selectedDiscounts = selectedDiscounts.filter(d => d.id !== this.value);
+        }
+        calculateTotal();
+    });
+});
+
+function calculateTotal() {
+    if (!selectedCorePlan) {
+        document.getElementById('summary-content').innerHTML = `
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i>
+                Select a core plan to see your total
+            </div>
+        `;
+        return;
+    }
+
+    let html = '<div class="mb-3">';
+
+    // Core Plan
+    html += '<h6 class="border-bottom pb-2">Core Plan</h6>';
+    html += `<div class="d-flex justify-content-between mb-2">
+        <span>Base tuition (${selectedCorePlan.period})</span>
+        <strong>$${selectedCorePlan.price.toFixed(2)}</strong>
+    </div>`;
+
+    let corePlanTotal = selectedCorePlan.price;
+    let addonsTotal = 0;
+    let feesTotal = 0;
+    let extendedCareTotal = 0;
+
+    // Extended Care
+    if (extendedCareHours > 0 && extendedCareRate > 0) {
+        extendedCareTotal = extendedCareHours * extendedCareRate;
+        const weeksInPeriod = selectedCorePlan.period === 'monthly' ? 4 : 1;
+        const daysPerWeek = 5; // Assume 5 days per week for now
+        extendedCareTotal = extendedCareTotal * daysPerWeek * weeksInPeriod;
+
+        html += '<h6 class="border-bottom pb-2 mt-3">Extended Care</h6>';
+        html += `<div class="d-flex justify-content-between mb-2">
+            <small>${extendedCareHours.toFixed(2)} hrs/day × $${extendedCareRate.toFixed(2)}/hr × ${daysPerWeek} days × ${weeksInPeriod} weeks</small>
+            <span>$${extendedCareTotal.toFixed(2)}</span>
+        </div>`;
+        addonsTotal += extendedCareTotal;
+    }
+
+    // Add-ons
+    if (selectedAddons.length > 0) {
+        html += '<h6 class="border-bottom pb-2 mt-3">Add-Ons</h6>';
+        selectedAddons.forEach(addon => {
+            const checkbox = document.querySelector(`.addon-checkbox[data-addon-id="${addon.id}"]`);
+            const label = document.querySelector(`label[for="addon_check_${addon.id}"]`).textContent;
+            html += `<div class="d-flex justify-content-between mb-2">
+                <small>${label.trim()}</small>
+                <span>$${addon.price.toFixed(2)}</span>
+            </div>`;
+            addonsTotal += addon.price;
+        });
+    }
+
+    // Fees
+    if (selectedFees.length > 0) {
+        html += '<h6 class="border-bottom pb-2 mt-3">One-Time Fees</h6>';
+        selectedFees.forEach(fee => {
+            const label = document.querySelector(`label[for="fee_${fee.id}"]`).querySelector('strong').textContent;
+            html += `<div class="d-flex justify-content-between mb-2">
+                <small>${label}</small>
+                <span>$${fee.amount.toFixed(2)}</span>
+            </div>`;
+            feesTotal += fee.amount;
+        });
+    }
+
+    // Subtotals
+    let subtotal = corePlanTotal + addonsTotal + feesTotal;
+    html += `<div class="d-flex justify-content-between border-top pt-2 mt-3">
+        <strong>Subtotal</strong>
+        <strong>$${subtotal.toFixed(2)}</strong>
+    </div>`;
+
+    // Apply discounts
+    let totalDiscount = 0;
+    if (selectedDiscounts.length > 0) {
+        html += '<h6 class="border-bottom pb-2 mt-3">Discounts</h6>';
+
+        selectedDiscounts.forEach(discount => {
+            const label = document.querySelector(`label[for="discount_${discount.id}"]`).querySelector('strong').textContent;
+            let discountAmount = 0;
+
+            if (discount.appliesTo === 'core_plan') {
+                if (discount.type === 'percentage') {
+                    discountAmount = corePlanTotal * (discount.amount / 100);
+                } else {
+                    discountAmount = Math.min(discount.amount, corePlanTotal);
+                }
+            } else if (discount.appliesTo === 'add_ons') {
+                if (discount.type === 'percentage') {
+                    discountAmount = addonsTotal * (discount.amount / 100);
+                } else {
+                    discountAmount = Math.min(discount.amount, addonsTotal);
+                }
+            } else if (discount.appliesTo === 'fees') {
+                if (discount.type === 'percentage') {
+                    discountAmount = feesTotal * (discount.amount / 100);
+                } else {
+                    discountAmount = Math.min(discount.amount, feesTotal);
+                }
+            } else if (discount.appliesTo === 'total') {
+                if (discount.type === 'percentage') {
+                    discountAmount = subtotal * (discount.amount / 100);
+                } else {
+                    discountAmount = Math.min(discount.amount, subtotal);
+                }
+            }
+
+            totalDiscount += discountAmount;
+            html += `<div class="d-flex justify-content-between mb-2 text-danger">
+                <small>${label}</small>
+                <span>-$${discountAmount.toFixed(2)}</span>
+            </div>`;
+        });
+    }
+
+    // Grand Total
+    const grandTotal = subtotal - totalDiscount;
+    html += `<div class="d-flex justify-content-between border-top pt-3 mt-3">
+        <h5 class="mb-0">Total ${selectedCorePlan.period === 'monthly' ? 'Monthly' : 'Weekly'}</h5>
+        <h5 class="mb-0 text-success">$${grandTotal.toFixed(2)}</h5>
+    </div>`;
+
+    // Cost breakdown info
+    if (selectedCorePlan.period === 'monthly') {
+        html += `<div class="mt-3 p-2 bg-light rounded">
+            <small class="text-muted">
+                <strong>Weekly:</strong> ~$${(grandTotal / 4).toFixed(2)}<br>
+                <strong>Annual:</strong> ~$${(grandTotal * 12).toFixed(2)}
+            </small>
+        </div>`;
+    } else {
+        html += `<div class="mt-3 p-2 bg-light rounded">
+            <small class="text-muted">
+                <strong>Monthly:</strong> ~$${(grandTotal * 4).toFixed(2)}<br>
+                <strong>Annual:</strong> ~$${(grandTotal * 52).toFixed(2)}
+            </small>
+        </div>`;
+    }
+
+    html += '</div>';
+    document.getElementById('summary-content').innerHTML = html;
+}
+</script>
+{% endblock %}

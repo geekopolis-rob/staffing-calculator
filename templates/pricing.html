@@ -1,0 +1,945 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Pricing - Staffing Calculator{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h2><i class="bi bi-currency-dollar"></i> Pricing Management</h2>
+        <p class="text-muted">Configure core plans, add-ons, one-time fees, and discounts</p>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('pricing_calculator') }}" class="btn btn-success" target="_blank">
+            <i class="bi bi-calculator"></i> View Calculator
+        </a>
+    </div>
+</div>
+
+<!-- Core Plans Section -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-star-fill"></i> Core Plans</h5>
+        <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addCorePlanModal">
+            <i class="bi bi-plus-circle"></i> Add Core Plan
+        </button>
+    </div>
+    <div class="card-body">
+        {% if not core_plans %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No core plans configured. Click "Add Core Plan" to create one.
+        </div>
+        {% else %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Price</th>
+                        <th>Billing Period</th>
+                        <th>Schedule</th>
+                        <th>Age Group</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for plan in core_plans %}
+                    <tr>
+                        <td>
+                            <strong>{{ plan.name }}</strong>
+                            {% if plan.description %}
+                            <br><small class="text-muted">{{ plan.description }}</small>
+                            {% endif %}
+                        </td>
+                        <td>${{ "%.2f"|format(plan.base_price) }}</td>
+                        <td><span class="badge bg-info">{{ plan.billing_period|title }}</span></td>
+                        <td>
+                            <small>{{ plan.get_schedule_display() }}</small>
+                        </td>
+                        <td>
+                            {% if plan.age_group_id %}
+                            {% set ag = age_groups|selectattr('id', 'equalto', plan.age_group_id)|first %}
+                            <small>{{ ag.name if ag else 'N/A' }}</small>
+                            {% else %}
+                            <small class="text-muted">All ages</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge {% if plan.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ 'Active' if plan.is_active else 'Inactive' }}
+                            </span>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-primary"
+                                    data-bs-toggle="modal" data-bs-target="#editCorePlanModal{{ plan.id }}"
+                                    title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <form method="POST" action="{{ url_for('toggle_core_plan', id=plan.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-warning" title="Toggle Active">
+                                    <i class="bi bi-toggle-{{ 'on' if plan.is_active else 'off' }}"></i>
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ url_for('delete_core_plan', id=plan.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-danger"
+                                        onclick="return confirm('Delete {{ plan.name }}?')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Edit Core Plan Modals -->
+        {% for plan in core_plans %}
+        <div class="modal fade" id="editCorePlanModal{{ plan.id }}" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Core Plan</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form method="POST" action="{{ url_for('edit_core_plan', id=plan.id) }}">
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="edit_plan_name_{{ plan.id }}" class="form-label">Plan Name</label>
+                                <input type="text" class="form-control" id="edit_plan_name_{{ plan.id }}"
+                                       name="name" value="{{ plan.name }}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_plan_description_{{ plan.id }}" class="form-label">Description</label>
+                                <textarea class="form-control" id="edit_plan_description_{{ plan.id }}"
+                                          name="description" rows="2">{{ plan.description or '' }}</textarea>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="edit_plan_price_{{ plan.id }}" class="form-label">Base Price ($)</label>
+                                    <input type="number" class="form-control" id="edit_plan_price_{{ plan.id }}"
+                                           name="base_price" step="0.01" min="0" value="{{ plan.base_price }}" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="edit_plan_billing_{{ plan.id }}" class="form-label">Billing Period</label>
+                                    <select class="form-select" id="edit_plan_billing_{{ plan.id }}" name="billing_period" required>
+                                        <option value="weekly" {% if plan.billing_period == 'weekly' %}selected{% endif %}>Weekly</option>
+                                        <option value="monthly" {% if plan.billing_period == 'monthly' %}selected{% endif %}>Monthly</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Days of Week</label>
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="monday"
+                                                   id="edit_monday_{{ plan.id }}" {% if plan.monday %}checked{% endif %}>
+                                            <label class="form-check-label" for="edit_monday_{{ plan.id }}">Monday</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="tuesday"
+                                                   id="edit_tuesday_{{ plan.id }}" {% if plan.tuesday %}checked{% endif %}>
+                                            <label class="form-check-label" for="edit_tuesday_{{ plan.id }}">Tuesday</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="wednesday"
+                                                   id="edit_wednesday_{{ plan.id }}" {% if plan.wednesday %}checked{% endif %}>
+                                            <label class="form-check-label" for="edit_wednesday_{{ plan.id }}">Wednesday</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="thursday"
+                                                   id="edit_thursday_{{ plan.id }}" {% if plan.thursday %}checked{% endif %}>
+                                            <label class="form-check-label" for="edit_thursday_{{ plan.id }}">Thursday</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="friday"
+                                                   id="edit_friday_{{ plan.id }}" {% if plan.friday %}checked{% endif %}>
+                                            <label class="form-check-label" for="edit_friday_{{ plan.id }}">Friday</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="edit_start_time_{{ plan.id }}" class="form-label">Start Time</label>
+                                    <input type="text" class="form-control" id="edit_start_time_{{ plan.id }}"
+                                           name="start_time" value="{{ plan.start_time }}" placeholder="9:00 AM">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="edit_end_time_{{ plan.id }}" class="form-label">End Time</label>
+                                    <input type="text" class="form-control" id="edit_end_time_{{ plan.id }}"
+                                           name="end_time" value="{{ plan.end_time }}" placeholder="3:00 PM">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_plan_age_group_{{ plan.id }}" class="form-label">Age Group (Optional)</label>
+                                <select class="form-select" id="edit_plan_age_group_{{ plan.id }}" name="age_group_id">
+                                    <option value="">All Age Groups</option>
+                                    {% for ag in age_groups %}
+                                    <option value="{{ ag.id }}" {% if plan.age_group_id == ag.id %}selected{% endif %}>{{ ag.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="edit_plan_active_{{ plan.id }}"
+                                       name="is_active" {% if plan.is_active %}checked{% endif %}>
+                                <label class="form-check-label" for="edit_plan_active_{{ plan.id }}">Active</label>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i> Update Plan
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add-Ons Section -->
+<div class="card mb-4">
+    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-plus-square"></i> Add-Ons</h5>
+        <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addAddonModal">
+            <i class="bi bi-plus-circle"></i> Add Add-On
+        </button>
+    </div>
+    <div class="card-body">
+        {% if not add_ons %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No add-ons configured.
+        </div>
+        {% else %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Pricing Type</th>
+                        <th>Price</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for addon in add_ons %}
+                    <tr>
+                        <td>
+                            <strong>{{ addon.name }}</strong>
+                            {% if addon.description %}
+                            <br><small class="text-muted">{{ addon.description }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-info">
+                                {% if addon.pricing_type == 'per_day' %}Per Day
+                                {% elif addon.pricing_type == 'time_based' %}Time-Based
+                                {% elif addon.pricing_type == 'one_time' %}One-Time
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            {% if addon.pricing_type == 'time_based' %}
+                            ${{ "%.2f"|format(addon.price) }} / {{ addon.minutes_unit }} min
+                            {% else %}
+                            ${{ "%.2f"|format(addon.price) }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge {% if addon.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ 'Active' if addon.is_active else 'Inactive' }}
+                            </span>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-primary"
+                                    data-bs-toggle="modal" data-bs-target="#editAddonModal{{ addon.id }}"
+                                    title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <form method="POST" action="{{ url_for('toggle_addon', id=addon.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-warning" title="Toggle Active">
+                                    <i class="bi bi-toggle-{{ 'on' if addon.is_active else 'off' }}"></i>
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ url_for('delete_addon', id=addon.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-danger"
+                                        onclick="return confirm('Delete {{ addon.name }}?')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Edit Add-On Modals -->
+        {% for addon in add_ons %}
+        <div class="modal fade" id="editAddonModal{{ addon.id }}" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Add-On</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form method="POST" action="{{ url_for('edit_addon', id=addon.id) }}">
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="edit_addon_name_{{ addon.id }}" class="form-label">Add-On Name</label>
+                                <input type="text" class="form-control" id="edit_addon_name_{{ addon.id }}"
+                                       name="name" value="{{ addon.name }}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_addon_description_{{ addon.id }}" class="form-label">Description</label>
+                                <textarea class="form-control" id="edit_addon_description_{{ addon.id }}"
+                                          name="description" rows="2">{{ addon.description or '' }}</textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_addon_pricing_type_{{ addon.id }}" class="form-label">Pricing Type</label>
+                                <select class="form-select" id="edit_addon_pricing_type_{{ addon.id }}" name="pricing_type" required>
+                                    <option value="per_day" {% if addon.pricing_type == 'per_day' %}selected{% endif %}>Per Day</option>
+                                    <option value="time_based" {% if addon.pricing_type == 'time_based' %}selected{% endif %}>Time-Based (per minute)</option>
+                                    <option value="one_time" {% if addon.pricing_type == 'one_time' %}selected{% endif %}>One-Time Fee</option>
+                                </select>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="edit_addon_price_{{ addon.id }}" class="form-label">Price ($)</label>
+                                    <input type="number" class="form-control" id="edit_addon_price_{{ addon.id }}"
+                                           name="price" step="0.01" min="0" value="{{ addon.price }}" required>
+                                    <small class="form-text text-muted">For time-based: price per X minutes</small>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="edit_addon_minutes_{{ addon.id }}" class="form-label">Minutes Unit</label>
+                                    <input type="number" class="form-control" id="edit_addon_minutes_{{ addon.id }}"
+                                           name="minutes_unit" min="1" value="{{ addon.minutes_unit or 15 }}">
+                                    <small class="form-text text-muted">Only for time-based pricing</small>
+                                </div>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="edit_addon_extended_care_{{ addon.id }}"
+                                       name="is_extended_care" {% if addon.is_extended_care %}checked{% endif %}>
+                                <label class="form-check-label" for="edit_addon_extended_care_{{ addon.id }}">
+                                    Extended Care Pricing
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="edit_addon_active_{{ addon.id }}"
+                                       name="is_active" {% if addon.is_active %}checked{% endif %}>
+                                <label class="form-check-label" for="edit_addon_active_{{ addon.id }}">Active</label>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-save"></i> Update Add-On
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        {% endif %}
+    </div>
+</div>
+
+<!-- One-Time Fees Section -->
+<div class="card mb-4">
+    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-receipt"></i> One-Time Fees</h5>
+        <button class="btn btn-dark btn-sm" data-bs-toggle="modal" data-bs-target="#addFeeModal">
+            <i class="bi bi-plus-circle"></i> Add Fee
+        </button>
+    </div>
+    <div class="card-body">
+        {% if not fees %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No fees configured.
+        </div>
+        {% else %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>Refundable</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for fee in fees %}
+                    <tr>
+                        <td>
+                            <strong>{{ fee.name }}</strong>
+                            {% if fee.description %}
+                            <br><small class="text-muted">{{ fee.description }}</small>
+                            {% endif %}
+                        </td>
+                        <td><span class="badge bg-secondary">{{ fee.fee_type|title }}</span></td>
+                        <td>${{ "%.2f"|format(fee.amount) }}</td>
+                        <td>
+                            {% if fee.is_refundable %}
+                            <span class="badge bg-success">Yes</span>
+                            {% else %}
+                            <span class="badge bg-danger">No</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge {% if fee.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ 'Active' if fee.is_active else 'Inactive' }}
+                            </span>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-primary"
+                                    data-bs-toggle="modal" data-bs-target="#editFeeModal{{ fee.id }}"
+                                    title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <form method="POST" action="{{ url_for('toggle_fee', id=fee.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-warning" title="Toggle Active">
+                                    <i class="bi bi-toggle-{{ 'on' if fee.is_active else 'off' }}"></i>
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ url_for('delete_fee', id=fee.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-danger"
+                                        onclick="return confirm('Delete {{ fee.name }}?')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Edit Fee Modals -->
+        {% for fee in fees %}
+        <div class="modal fade" id="editFeeModal{{ fee.id }}" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit One-Time Fee</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form method="POST" action="{{ url_for('edit_fee', id=fee.id) }}">
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="edit_fee_name_{{ fee.id }}" class="form-label">Fee Name</label>
+                                <input type="text" class="form-control" id="edit_fee_name_{{ fee.id }}"
+                                       name="name" value="{{ fee.name }}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_fee_description_{{ fee.id }}" class="form-label">Description</label>
+                                <textarea class="form-control" id="edit_fee_description_{{ fee.id }}"
+                                          name="description" rows="2">{{ fee.description or '' }}</textarea>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="edit_fee_amount_{{ fee.id }}" class="form-label">Amount ($)</label>
+                                    <input type="number" class="form-control" id="edit_fee_amount_{{ fee.id }}"
+                                           name="amount" step="0.01" min="0" value="{{ fee.amount }}" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="edit_fee_type_{{ fee.id }}" class="form-label">Fee Type</label>
+                                    <select class="form-select" id="edit_fee_type_{{ fee.id }}" name="fee_type" required>
+                                        <option value="registration" {% if fee.fee_type == 'registration' %}selected{% endif %}>Registration</option>
+                                        <option value="materials" {% if fee.fee_type == 'materials' %}selected{% endif %}>Materials</option>
+                                        <option value="deposit" {% if fee.fee_type == 'deposit' %}selected{% endif %}>Deposit</option>
+                                        <option value="other" {% if fee.fee_type == 'other' %}selected{% endif %}>Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="edit_fee_refundable_{{ fee.id }}"
+                                       name="is_refundable" {% if fee.is_refundable %}checked{% endif %}>
+                                <label class="form-check-label" for="edit_fee_refundable_{{ fee.id }}">Refundable</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="edit_fee_active_{{ fee.id }}"
+                                       name="is_active" {% if fee.is_active %}checked{% endif %}>
+                                <label class="form-check-label" for="edit_fee_active_{{ fee.id }}">Active</label>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-warning text-dark">
+                                <i class="bi bi-save"></i> Update Fee
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        {% endif %}
+    </div>
+</div>
+
+<!-- Discounts Section -->
+<div class="card mb-4">
+    <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-percent"></i> Discounts</h5>
+        <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addDiscountModal">
+            <i class="bi bi-plus-circle"></i> Add Discount
+        </button>
+    </div>
+    <div class="card-body">
+        {% if not discounts %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No discounts configured.
+        </div>
+        {% else %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>Applies To</th>
+                        <th>Conditions</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for discount in discounts %}
+                    <tr>
+                        <td>
+                            <strong>{{ discount.name }}</strong>
+                            {% if discount.description %}
+                            <br><small class="text-muted">{{ discount.description }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-info">
+                                {{ discount.discount_type|title }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if discount.discount_type == 'percentage' %}
+                            {{ discount.amount }}%
+                            {% else %}
+                            ${{ "%.2f"|format(discount.amount) }}
+                            {% endif %}
+                        </td>
+                        <td><span class="badge bg-secondary">{{ discount.applies_to|replace('_', ' ')|title }}</span></td>
+                        <td><small>{{ discount.conditions or '—' }}</small></td>
+                        <td>
+                            <span class="badge {% if discount.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ 'Active' if discount.is_active else 'Inactive' }}
+                            </span>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-primary"
+                                    data-bs-toggle="modal" data-bs-target="#editDiscountModal{{ discount.id }}"
+                                    title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <form method="POST" action="{{ url_for('toggle_discount', id=discount.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-warning" title="Toggle Active">
+                                    <i class="bi bi-toggle-{{ 'on' if discount.is_active else 'off' }}"></i>
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ url_for('delete_discount', id=discount.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-danger"
+                                        onclick="return confirm('Delete {{ discount.name }}?')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Edit Discount Modals -->
+        {% for discount in discounts %}
+        <div class="modal fade" id="editDiscountModal{{ discount.id }}" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Discount</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form method="POST" action="{{ url_for('edit_discount', id=discount.id) }}">
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="edit_discount_name_{{ discount.id }}" class="form-label">Discount Name</label>
+                                <input type="text" class="form-control" id="edit_discount_name_{{ discount.id }}"
+                                       name="name" value="{{ discount.name }}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_discount_description_{{ discount.id }}" class="form-label">Description</label>
+                                <textarea class="form-control" id="edit_discount_description_{{ discount.id }}"
+                                          name="description" rows="2">{{ discount.description or '' }}</textarea>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="edit_discount_type_{{ discount.id }}" class="form-label">Discount Type</label>
+                                    <select class="form-select" id="edit_discount_type_{{ discount.id }}" name="discount_type" required>
+                                        <option value="percentage" {% if discount.discount_type == 'percentage' %}selected{% endif %}>Percentage</option>
+                                        <option value="fixed" {% if discount.discount_type == 'fixed' %}selected{% endif %}>Fixed Amount</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="edit_discount_amount_{{ discount.id }}" class="form-label">Amount</label>
+                                    <input type="number" class="form-control" id="edit_discount_amount_{{ discount.id }}"
+                                           name="amount" step="0.01" min="0" value="{{ discount.amount }}" required>
+                                    <small class="form-text text-muted">% or $ depending on type</small>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_discount_applies_{{ discount.id }}" class="form-label">Applies To</label>
+                                <select class="form-select" id="edit_discount_applies_{{ discount.id }}" name="applies_to" required>
+                                    <option value="core_plan" {% if discount.applies_to == 'core_plan' %}selected{% endif %}>Core Plan Only</option>
+                                    <option value="add_ons" {% if discount.applies_to == 'add_ons' %}selected{% endif %}>Add-Ons Only</option>
+                                    <option value="fees" {% if discount.applies_to == 'fees' %}selected{% endif %}>Fees Only</option>
+                                    <option value="total" {% if discount.applies_to == 'total' %}selected{% endif %}>Total Amount</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_discount_conditions_{{ discount.id }}" class="form-label">Conditions</label>
+                                <textarea class="form-control" id="edit_discount_conditions_{{ discount.id }}"
+                                          name="conditions" rows="2" placeholder="e.g., 2nd child, annual payment">{{ discount.conditions or '' }}</textarea>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="edit_discount_active_{{ discount.id }}"
+                                       name="is_active" {% if discount.is_active %}checked{% endif %}>
+                                <label class="form-check-label" for="edit_discount_active_{{ discount.id }}">Active</label>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-save"></i> Update Discount
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Core Plan Modal -->
+<div class="modal fade" id="addCorePlanModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Add Core Plan</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_core_plan') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="plan_name" class="form-label">Plan Name</label>
+                        <input type="text" class="form-control" id="plan_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="plan_description" class="form-label">Description</label>
+                        <textarea class="form-control" id="plan_description" name="description" rows="2"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="plan_price" class="form-label">Base Price ($)</label>
+                            <input type="number" class="form-control" id="plan_price" name="base_price"
+                                   step="0.01" min="0" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="plan_billing" class="form-label">Billing Period</label>
+                            <select class="form-select" id="plan_billing" name="billing_period" required>
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly" selected>Monthly</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Days of Week</label>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="monday" id="plan_monday" checked>
+                                    <label class="form-check-label" for="plan_monday">Monday</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="tuesday" id="plan_tuesday" checked>
+                                    <label class="form-check-label" for="plan_tuesday">Tuesday</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="wednesday" id="plan_wednesday" checked>
+                                    <label class="form-check-label" for="plan_wednesday">Wednesday</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="thursday" id="plan_thursday" checked>
+                                    <label class="form-check-label" for="plan_thursday">Thursday</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="friday" id="plan_friday" checked>
+                                    <label class="form-check-label" for="plan_friday">Friday</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="plan_start_time" class="form-label">Start Time</label>
+                            <input type="text" class="form-control" id="plan_start_time" name="start_time"
+                                   value="9:00 AM" placeholder="9:00 AM">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="plan_end_time" class="form-label">End Time</label>
+                            <input type="text" class="form-control" id="plan_end_time" name="end_time"
+                                   value="3:00 PM" placeholder="3:00 PM">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="plan_age_group" class="form-label">Age Group (Optional)</label>
+                        <select class="form-select" id="plan_age_group" name="age_group_id">
+                            <option value="">All Age Groups</option>
+                            {% for ag in age_groups %}
+                            <option value="{{ ag.id }}">{{ ag.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="plan_active" name="is_active" checked>
+                        <label class="form-check-label" for="plan_active">Active</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Save Plan
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Add-On Modal -->
+<div class="modal fade" id="addAddonModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Add Add-On</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_addon') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="addon_name" class="form-label">Add-On Name</label>
+                        <input type="text" class="form-control" id="addon_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="addon_description" class="form-label">Description</label>
+                        <textarea class="form-control" id="addon_description" name="description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="addon_pricing_type" class="form-label">Pricing Type</label>
+                        <select class="form-select" id="addon_pricing_type" name="pricing_type" required>
+                            <option value="per_day">Per Day</option>
+                            <option value="time_based">Time-Based (per minute)</option>
+                            <option value="one_time">One-Time Fee</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="addon_price" class="form-label">Price ($)</label>
+                            <input type="number" class="form-control" id="addon_price" name="price"
+                                   step="0.01" min="0" required>
+                            <small class="form-text text-muted">For time-based: price per X minutes</small>
+                        </div>
+                        <div class="col-md-6 mb-3" id="addon_minutes_div">
+                            <label for="addon_minutes" class="form-label">Minutes Unit</label>
+                            <input type="number" class="form-control" id="addon_minutes" name="minutes_unit"
+                                   min="1" value="15">
+                            <small class="form-text text-muted">Only for time-based pricing</small>
+                        </div>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="addon_extended_care" name="is_extended_care">
+                        <label class="form-check-label" for="addon_extended_care">
+                            Extended Care Pricing
+                        </label>
+                        <div class="form-text">For extended care, use "Time-Based" pricing type and enter hourly rate</div>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="addon_active" name="is_active" checked>
+                        <label class="form-check-label" for="addon_active">Active</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-save"></i> Save Add-On
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Fee Modal -->
+<div class="modal fade" id="addFeeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Add One-Time Fee</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_fee') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="fee_name" class="form-label">Fee Name</label>
+                        <input type="text" class="form-control" id="fee_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="fee_description" class="form-label">Description</label>
+                        <textarea class="form-control" id="fee_description" name="description" rows="2"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="fee_amount" class="form-label">Amount ($)</label>
+                            <input type="number" class="form-control" id="fee_amount" name="amount"
+                                   step="0.01" min="0" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="fee_type" class="form-label">Fee Type</label>
+                            <select class="form-select" id="fee_type" name="fee_type" required>
+                                <option value="registration">Registration</option>
+                                <option value="materials">Materials</option>
+                                <option value="deposit">Deposit</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="fee_refundable" name="is_refundable">
+                        <label class="form-check-label" for="fee_refundable">Refundable</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="fee_active" name="is_active" checked>
+                        <label class="form-check-label" for="fee_active">Active</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning text-dark">
+                        <i class="bi bi-save"></i> Save Fee
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Discount Modal -->
+<div class="modal fade" id="addDiscountModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Add Discount</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_discount') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="discount_name" class="form-label">Discount Name</label>
+                        <input type="text" class="form-control" id="discount_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="discount_description" class="form-label">Description</label>
+                        <textarea class="form-control" id="discount_description" name="description" rows="2"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="discount_type" class="form-label">Discount Type</label>
+                            <select class="form-select" id="discount_type" name="discount_type" required>
+                                <option value="percentage">Percentage</option>
+                                <option value="fixed">Fixed Amount</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="discount_amount" class="form-label">Amount</label>
+                            <input type="number" class="form-control" id="discount_amount" name="amount"
+                                   step="0.01" min="0" required>
+                            <small class="form-text text-muted">% or $ depending on type</small>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="discount_applies" class="form-label">Applies To</label>
+                        <select class="form-select" id="discount_applies" name="applies_to" required>
+                            <option value="core_plan">Core Plan Only</option>
+                            <option value="add_ons">Add-Ons Only</option>
+                            <option value="fees">Fees Only</option>
+                            <option value="total">Total Amount</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="discount_conditions" class="form-label">Conditions</label>
+                        <textarea class="form-control" id="discount_conditions" name="conditions" rows="2"
+                                  placeholder="e.g., 2nd child, annual payment"></textarea>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="discount_active" name="is_active" checked>
+                        <label class="form-check-label" for="discount_active">Active</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-save"></i> Save Discount
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Show/hide minutes field based on pricing type
+document.getElementById('addon_pricing_type').addEventListener('change', function() {
+    const minutesDiv = document.getElementById('addon_minutes_div');
+    minutesDiv.style.display = this.value === 'time_based' ? 'block' : 'none';
+});
+</script>
+{% endblock %}
