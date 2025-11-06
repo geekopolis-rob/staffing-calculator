@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}Monthly Schedule - Staffing Calculator{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h2><i class="bi bi-calendar-month"></i> Monthly Schedule</h2>
+        <p class="text-muted">View enrolled children and staffing requirements by day</p>
+    </div>
+    <div class="col-auto">
+        <div class="btn-group">
+            <a href="{{ url_for('monthly_schedule', year=year, month=month-1 if month > 1 else 12) }}"
+               class="btn btn-outline-primary">
+                <i class="bi bi-chevron-left"></i> Previous
+            </a>
+            <button class="btn btn-primary" disabled>{{ month_name }}</button>
+            <a href="{{ url_for('monthly_schedule', year=year, month=month+1 if month < 12 else 1) }}"
+               class="btn btn-outline-primary">
+                Next <i class="bi bi-chevron-right"></i>
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered text-center">
+                <thead>
+                    <tr>
+                        <th class="bg-light">Sunday</th>
+                        <th class="bg-light">Monday</th>
+                        <th class="bg-light">Tuesday</th>
+                        <th class="bg-light">Wednesday</th>
+                        <th class="bg-light">Thursday</th>
+                        <th class="bg-light">Friday</th>
+                        <th class="bg-light">Saturday</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for week in calendar %}
+                    <tr>
+                        {% for day in week %}
+                        <td class="align-top p-2" style="height: 120px; width: 14.28%;">
+                            {% if day == 0 %}
+                            <!-- Empty cell for days from other months -->
+                            {% else %}
+                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                <span class="badge bg-secondary">{{ day }}</span>
+                                {% if schedule_data[day]['total_children'] > 0 %}
+                                <span class="badge bg-primary">{{ schedule_data[day]['total_children'] }}</span>
+                                {% endif %}
+                            </div>
+
+                            {% if schedule_data[day]['day_name'] in ['Saturday', 'Sunday'] %}
+                            <small class="text-muted d-block">Closed</small>
+                            {% elif schedule_data[day]['total_children'] > 0 %}
+                            <div class="small">
+                                {% for item in schedule_data[day]['enrollments'][:3] %}
+                                <div class="text-truncate">
+                                    <span class="badge bg-info" style="font-size: 0.7rem;">
+                                        {{ item['enrollment'].age_group.name[:3] }}
+                                    </span>
+                                    {{ item['count'] }} in {{ item['enrollment'].package.name }}
+                                </div>
+                                {% endfor %}
+                                {% if schedule_data[day]['enrollments']|length > 3 %}
+                                <div class="text-muted">+{{ schedule_data[day]['enrollments']|length - 3 }} more</div>
+                                {% endif %}
+                                <button class="btn btn-sm btn-outline-primary mt-1 w-100"
+                                        onclick="viewDayDetails('{{ schedule_data[day]['date'].strftime('%Y-%m-%d') }}')">
+                                    View Details
+                                </button>
+                            </div>
+                            {% else %}
+                            <small class="text-muted">No children</small>
+                            {% endif %}
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Day Details Modal -->
+<div class="modal fade" id="dayDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="dayDetailsTitle">Day Schedule</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="dayDetailsBody">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function viewDayDetails(dateStr) {
+    const modal = new bootstrap.Modal(document.getElementById('dayDetailsModal'));
+    const titleEl = document.getElementById('dayDetailsTitle');
+    const bodyEl = document.getElementById('dayDetailsBody');
+
+    // Show loading
+    bodyEl.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
+    modal.show();
+
+    try {
+        const response = await fetch(`/schedule/daily/${dateStr}`);
+        const data = await response.json();
+
+        titleEl.textContent = `${data.day_name}, ${dateStr}`;
+
+        let html = `
+            <div class="alert alert-info">
+                <strong>Total Children:</strong> ${data.total_children} |
+                <strong>Total Staff Required:</strong> ${data.total_staff_required}
+            </div>
+
+            <h6 class="border-bottom pb-2">Age Group Breakdown</h6>
+            <div class="row mb-3">
+        `;
+
+        data.age_group_breakdown.forEach(ag => {
+            html += `
+                <div class="col-md-4 mb-2">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6>${ag.name}</h6>
+                            <p class="mb-1"><strong>Children:</strong> ${ag.count}</p>
+                            <p class="mb-1"><strong>Ratio:</strong> ${ag.ratio}</p>
+                            <p class="mb-0"><strong>Staff Needed:</strong> ${ag.required_staff}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `
+            </div>
+            <h6 class="border-bottom pb-2 mt-3">Enrollments</h6>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Count</th>
+                            <th>Age Group</th>
+                            <th>Package</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        data.children.forEach(enrollment => {
+            html += `
+                <tr>
+                    <td><strong>${enrollment.count} children</strong></td>
+                    <td><span class="badge bg-info">${enrollment.age_group}</span></td>
+                    <td>${enrollment.package_name}</td>
+                    <td>${enrollment.start_time} - ${enrollment.end_time}</td>
+                </tr>
+            `;
+        });
+
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        bodyEl.innerHTML = html;
+
+    } catch (error) {
+        bodyEl.innerHTML = '<div class="alert alert-danger">Error loading schedule details</div>';
+    }
+}
+</script>
+{% endblock %}

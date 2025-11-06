@@ -114,6 +114,71 @@ class Discount(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+class EnrollmentPackage(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    age_group_id = db.Column(db.Integer, db.ForeignKey('age_group.id'), nullable=True)
+    core_plan_id = db.Column(db.Integer, db.ForeignKey('core_plan.id'), nullable=False)
+    extended_care_start_time = db.Column(db.String(10), nullable=True)  # e.g., "7:00 AM"
+    extended_care_end_time = db.Column(db.String(10), nullable=True)  # e.g., "6:00 PM"
+    monthly_tuition = db.Column(db.Float, nullable=False)  # Calculated total monthly cost
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    core_plan = db.relationship('CorePlan', backref='packages')
+    age_group = db.relationship('AgeGroup', backref='packages')
+
+class PackageAddOn(db.Model):
+    """Junction table for packages and add-ons with quantity"""
+    id = db.Column(db.Integer, primary_key=True)
+    package_id = db.Column(db.Integer, db.ForeignKey('enrollment_package.id'), nullable=False)
+    addon_id = db.Column(db.Integer, db.ForeignKey('add_on.id'), nullable=False)
+    quantity = db.Column(db.Integer, default=1)  # days per week or minutes
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    package = db.relationship('EnrollmentPackage', backref='package_addons')
+    addon = db.relationship('AddOn', backref='package_addons')
+
+class PackageFee(db.Model):
+    """Junction table for packages and one-time fees"""
+    id = db.Column(db.Integer, primary_key=True)
+    package_id = db.Column(db.Integer, db.ForeignKey('enrollment_package.id'), nullable=False)
+    fee_id = db.Column(db.Integer, db.ForeignKey('one_time_fee.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    package = db.relationship('EnrollmentPackage', backref='package_fees')
+    fee = db.relationship('OneTimeFee', backref='package_fees')
+
+class PackageDiscount(db.Model):
+    """Junction table for packages and discounts"""
+    id = db.Column(db.Integer, primary_key=True)
+    package_id = db.Column(db.Integer, db.ForeignKey('enrollment_package.id'), nullable=False)
+    discount_id = db.Column(db.Integer, db.ForeignKey('discount.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    package = db.relationship('EnrollmentPackage', backref='package_discounts')
+    discount = db.relationship('Discount', backref='package_discounts')
+
+class Enrollment(db.Model):
+    """Bulk enrollment tracking - number of children in a package"""
+    id = db.Column(db.Integer, primary_key=True)
+    enrollment_package_id = db.Column(db.Integer, db.ForeignKey('enrollment_package.id'), nullable=False)
+    age_group_id = db.Column(db.Integer, db.ForeignKey('age_group.id'), nullable=False)
+    child_count = db.Column(db.Integer, nullable=False, default=1)  # Number of children
+    start_date = db.Column(db.Date, nullable=False)
+    status = db.Column(db.String(20), default='active')  # 'active' or 'inactive'
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    age_group = db.relationship('AgeGroup', backref='enrollments')
+    package = db.relationship('EnrollmentPackage', backref='enrollments')
+
 # Permit levels and their supervision capabilities
 PERMIT_LEVELS = {
     'Program Director': {
@@ -569,12 +634,14 @@ def pricing_calculator():
     add_ons = AddOn.query.filter_by(is_active=True).order_by(AddOn.name).all()
     fees = OneTimeFee.query.filter_by(is_active=True).order_by(OneTimeFee.fee_type).all()
     discounts = Discount.query.filter_by(is_active=True).order_by(Discount.name).all()
+    age_groups = AgeGroup.query.all()
 
     return render_template('pricing_calculator.html',
                          core_plans=core_plans,
                          add_ons=add_ons,
                          fees=fees,
-                         discounts=discounts)
+                         discounts=discounts,
+                         age_groups=age_groups)
 
 # Core Plan Routes
 @app.route('/pricing/core-plan/add', methods=['POST'])
@@ -768,6 +835,269 @@ def edit_discount(id):
     db.session.commit()
     return redirect(url_for('manage_pricing'))
 
+# Package Routes
+@app.route('/packages')
+def manage_packages():
+    packages = EnrollmentPackage.query.all()
+    age_groups = AgeGroup.query.all()
+    return render_template('packages.html', packages=packages, age_groups=age_groups)
+
+@app.route('/packages/add', methods=['POST'])
+def add_package():
+    data = request.form
+    package = EnrollmentPackage(
+        name=data['name'],
+        description=data.get('description', ''),
+        age_group_id=int(data['age_group_id']) if data.get('age_group_id') else None,
+        core_plan_id=int(data['core_plan_id']),
+        extended_care_start_time=data.get('extended_care_start_time'),
+        extended_care_end_time=data.get('extended_care_end_time'),
+        monthly_tuition=float(data['monthly_tuition']),
+        is_active=data.get('is_active') == 'on'
+    )
+    db.session.add(package)
+    db.session.flush()  # Get the package ID
+
+    # Add selected add-ons
+    import json
+    if data.get('addons_json'):
+        addons = json.loads(data['addons_json'])
+        for addon_data in addons:
+            package_addon = PackageAddOn(
+                package_id=package.id,
+                addon_id=int(addon_data['id']),
+                quantity=int(addon_data['quantity'])
+            )
+            db.session.add(package_addon)
+
+    # Add selected fees
+    if data.get('fees_json'):
+        fees = json.loads(data['fees_json'])
+        for fee_id in fees:
+            package_fee = PackageFee(
+                package_id=package.id,
+                fee_id=int(fee_id)
+            )
+            db.session.add(package_fee)
+
+    # Add selected discounts
+    if data.get('discounts_json'):
+        discounts = json.loads(data['discounts_json'])
+        for discount_id in discounts:
+            package_discount = PackageDiscount(
+                package_id=package.id,
+                discount_id=int(discount_id)
+            )
+            db.session.add(package_discount)
+
+    db.session.commit()
+    return redirect(url_for('manage_packages'))
+
+@app.route('/packages/delete/<int:id>', methods=['POST'])
+def delete_package(id):
+    package = EnrollmentPackage.query.get_or_404(id)
+    db.session.delete(package)
+    db.session.commit()
+    return redirect(url_for('manage_packages'))
+
+@app.route('/packages/toggle/<int:id>', methods=['POST'])
+def toggle_package(id):
+    package = EnrollmentPackage.query.get_or_404(id)
+    package.is_active = not package.is_active
+    db.session.commit()
+    return redirect(url_for('manage_packages'))
+
+# Enrollment Routes
+@app.route('/enrollment')
+def manage_enrollment():
+    enrollments = Enrollment.query.all()
+    packages = EnrollmentPackage.query.filter_by(is_active=True).all()
+    age_groups = AgeGroup.query.all()
+    return render_template('enrollment.html', enrollments=enrollments, packages=packages, age_groups=age_groups)
+
+@app.route('/enrollment/add', methods=['POST'])
+def add_enrollment():
+    from datetime import datetime
+    data = request.form
+    enrollment = Enrollment(
+        enrollment_package_id=int(data['enrollment_package_id']),
+        age_group_id=int(data['age_group_id']),
+        child_count=int(data['child_count']),
+        start_date=datetime.strptime(data['start_date'], '%Y-%m-%d').date(),
+        status=data.get('status', 'active'),
+        notes=data.get('notes', '')
+    )
+    db.session.add(enrollment)
+    db.session.commit()
+    return redirect(url_for('manage_enrollment'))
+
+@app.route('/enrollment/delete/<int:id>', methods=['POST'])
+def delete_enrollment(id):
+    enrollment = Enrollment.query.get_or_404(id)
+    db.session.delete(enrollment)
+    db.session.commit()
+    return redirect(url_for('manage_enrollment'))
+
+@app.route('/enrollment/toggle/<int:id>', methods=['POST'])
+def toggle_enrollment_status(id):
+    enrollment = Enrollment.query.get_or_404(id)
+    enrollment.status = 'inactive' if enrollment.status == 'active' else 'active'
+    db.session.commit()
+    return redirect(url_for('manage_enrollment'))
+
+@app.route('/enrollment/edit/<int:id>', methods=['POST'])
+def edit_enrollment(id):
+    from datetime import datetime
+    enrollment = Enrollment.query.get_or_404(id)
+    data = request.form
+    enrollment.enrollment_package_id = int(data['enrollment_package_id'])
+    enrollment.age_group_id = int(data['age_group_id'])
+    enrollment.child_count = int(data['child_count'])
+    enrollment.start_date = datetime.strptime(data['start_date'], '%Y-%m-%d').date()
+    enrollment.notes = data.get('notes', '')
+    db.session.commit()
+    return redirect(url_for('manage_enrollment'))
+
+# Schedule Routes
+@app.route('/schedule')
+@app.route('/schedule/<int:year>/<int:month>')
+def monthly_schedule(year=None, month=None):
+    """View monthly schedule of enrolled children"""
+    from datetime import date
+    from calendar import monthrange, monthcalendar, day_name
+
+    # Default to current month if not specified
+    today = date.today()
+    year = year or today.year
+    month = month or today.month
+
+    # Get calendar data
+    cal = monthcalendar(year, month)
+    month_name = date(year, month, 1).strftime('%B %Y')
+
+    # Get all active enrollments
+    enrollments = Enrollment.query.filter_by(status='active').all()
+
+    # Build schedule data for each day
+    schedule_data = {}
+    for week in cal:
+        for day in week:
+            if day == 0:  # Skip empty days from previous/next month
+                continue
+
+            day_date = date(year, month, day)
+            day_name_str = day_date.strftime('%A')
+
+            # Determine attendance count for this day
+            total_children = 0
+            attending_enrollments = []
+
+            for enrollment in enrollments:
+                # Check if enrollment started by this date
+                if enrollment.start_date > day_date:
+                    continue
+
+                # Check if package includes this day
+                core_plan = enrollment.package.core_plan
+                day_attr = day_name_str.lower()
+
+                if hasattr(core_plan, day_attr) and getattr(core_plan, day_attr):
+                    total_children += enrollment.child_count
+                    attending_enrollments.append({
+                        'enrollment': enrollment,
+                        'count': enrollment.child_count,
+                        'core_start': core_plan.start_time,
+                        'core_end': core_plan.end_time,
+                        'extended_start': enrollment.package.extended_care_start_time,
+                        'extended_end': enrollment.package.extended_care_end_time
+                    })
+
+            schedule_data[day] = {
+                'date': day_date,
+                'day_name': day_name_str,
+                'total_children': total_children,
+                'enrollments': attending_enrollments
+            }
+
+    return render_template('schedule_monthly.html',
+                         year=year,
+                         month=month,
+                         month_name=month_name,
+                         calendar=cal,
+                         schedule_data=schedule_data,
+                         age_groups=AgeGroup.query.all())
+
+@app.route('/schedule/daily/<date_str>')
+def daily_schedule(date_str):
+    """View detailed schedule for a specific day"""
+    from datetime import datetime
+    import json
+
+    try:
+        day_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Invalid date format'}), 400
+
+    day_name_str = day_date.strftime('%A')
+
+    # Get all active enrollments attending this day
+    enrollments = Enrollment.query.filter_by(status='active').all()
+    attending = []
+
+    for enrollment in enrollments:
+        if enrollment.start_date > day_date:
+            continue
+
+        core_plan = enrollment.package.core_plan
+        day_attr = day_name_str.lower()
+
+        if hasattr(core_plan, day_attr) and getattr(core_plan, day_attr):
+            # Determine actual start/end times
+            start_time = enrollment.package.extended_care_start_time or core_plan.start_time
+            end_time = enrollment.package.extended_care_end_time or core_plan.end_time
+
+            attending.append({
+                'id': enrollment.id,
+                'count': enrollment.child_count,
+                'age_group': enrollment.age_group.name,
+                'age_group_id': enrollment.age_group_id,
+                'start_time': start_time,
+                'end_time': end_time,
+                'core_start': core_plan.start_time,
+                'core_end': core_plan.end_time,
+                'package_name': enrollment.package.name
+            })
+
+    # Calculate required staffing by age group and time slot
+    age_group_counts = {}
+    for item in attending:
+        ag_id = item['age_group_id']
+        if ag_id not in age_group_counts:
+            age_group = AgeGroup.query.get(ag_id)
+            age_group_counts[ag_id] = {
+                'name': age_group.name,
+                'ratio': age_group.required_ratio,
+                'count': 0,
+                'required_staff': 0
+            }
+        age_group_counts[ag_id]['count'] += item['count']
+
+    # Calculate required staff for each age group
+    for ag_id, data in age_group_counts.items():
+        age_group = AgeGroup.query.get(ag_id)
+        staff, children_per_staff = age_group.get_ratio_parts()
+        required = (data['count'] + children_per_staff - 1) // children_per_staff * staff
+        age_group_counts[ag_id]['required_staff'] = required
+
+    return jsonify({
+        'date': date_str,
+        'day_name': day_name_str,
+        'total_children': len(attending),
+        'children': attending,
+        'age_group_breakdown': list(age_group_counts.values()),
+        'total_staff_required': sum(ag['required_staff'] for ag in age_group_counts.values())
+    })
+
 @app.route('/initialize-db')
 def initialize_db():
     """Initialize database with sample data"""
@@ -794,8 +1124,8 @@ def initialize_db():
             enhanced_ratios=None
         )
 
-        # Preschool 2-3 years - with enhanced ratio options
-        preschool_2_3_enhanced = [
+        # Child (2-6 years) - with enhanced ratio options
+        child_enhanced = [
             {
                 'ratio': '1:15',
                 'description': '1 teacher + 1 aide',
@@ -811,40 +1141,15 @@ def initialize_db():
                 'aide_min_ece_units': 6
             }
         ]
-        preschool_2_3 = AgeGroup(
-            name='Preschool (2-3 years)',
+        child_group = AgeGroup(
+            name='Child (2-6 years)',
             min_age_months=24,
-            max_age_months=36,
+            max_age_months=72,
             required_ratio='1:12',
-            enhanced_ratios=json.dumps(preschool_2_3_enhanced)
+            enhanced_ratios=json.dumps(child_enhanced)
         )
 
-        # Preschool 3-5 years - with enhanced ratio options
-        preschool_3_5_enhanced = [
-            {
-                'ratio': '1:15',
-                'description': '1 teacher + 1 aide',
-                'requires_teachers': 1,
-                'requires_aides': 1,
-                'aide_min_ece_units': 0
-            },
-            {
-                'ratio': '1:18',
-                'description': '1 teacher + 1 aide with 6+ ECE units',
-                'requires_teachers': 1,
-                'requires_aides': 1,
-                'aide_min_ece_units': 6
-            }
-        ]
-        preschool_3_5 = AgeGroup(
-            name='Preschool (3-5 years)',
-            min_age_months=36,
-            max_age_months=60,
-            required_ratio='1:12',
-            enhanced_ratios=json.dumps(preschool_3_5_enhanced)
-        )
-
-        sample_groups = [infant_group, toddler_group, preschool_2_3, preschool_3_5]
+        sample_groups = [infant_group, toddler_group, child_group]
         for group in sample_groups:
             db.session.add(group)
         db.session.commit()
@@ -916,7 +1221,18 @@ def initialize_db():
             is_active=True
         )
 
+        kellys_corner = AddOn(
+            name="Kelly's Corner",
+            description='',
+            pricing_type='per_day',
+            price=10.0,
+            minutes_unit=1,
+            is_extended_care=False,
+            is_active=True
+        )
+
         db.session.add(extended_care)
+        db.session.add(kellys_corner)
         db.session.commit()
 
     return redirect(url_for('index'))

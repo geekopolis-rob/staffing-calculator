@@ -113,6 +113,7 @@
                                         <div class="form-check mb-3">
                                             <input class="form-check-input addon-checkbox" type="checkbox"
                                                    data-addon-id="{{ addon.id }}"
+                                                   data-addon-name="{{ addon.name }}"
                                                    data-pricing-type="{{ addon.pricing_type }}"
                                                    data-price="{{ addon.price }}"
                                                    data-minutes-unit="{{ addon.minutes_unit }}"
@@ -243,6 +244,59 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Save Package Modal -->
+<div class="modal fade" id="savePackageModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-box-seam"></i> Save as Package</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_package') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="package_name" class="form-label">Package Name</label>
+                        <input type="text" class="form-control" id="package_name" name="name"
+                               placeholder="e.g., Full-Time with Extended Care" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="package_description" class="form-label">Description (Optional)</label>
+                        <textarea class="form-control" id="package_description" name="description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="package_age_group" class="form-label">Age Group (Optional)</label>
+                        <select class="form-select" id="package_age_group" name="age_group_id">
+                            <option value="">All Age Groups</option>
+                            {% for ag in age_groups %}
+                            <option value="{{ ag.id }}">{{ ag.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="package_active" name="is_active" checked>
+                        <label class="form-check-label" for="package_active">Active</label>
+                    </div>
+
+                    <!-- Hidden fields -->
+                    <input type="hidden" id="package_core_plan_id" name="core_plan_id">
+                    <input type="hidden" id="package_monthly_tuition" name="monthly_tuition">
+                    <input type="hidden" id="package_extended_start" name="extended_care_start_time">
+                    <input type="hidden" id="package_extended_end" name="extended_care_end_time">
+                    <input type="hidden" id="package_addons_json" name="addons_json">
+                    <input type="hidden" id="package_fees_json" name="fees_json">
+                    <input type="hidden" id="package_discounts_json" name="discounts_json">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Save Package
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -566,9 +620,9 @@ function calculateTotal() {
         html += '<h6 class="border-bottom pb-2 mt-3">Add-Ons</h6>';
         selectedAddons.forEach(addon => {
             const checkbox = document.querySelector(`.addon-checkbox[data-addon-id="${addon.id}"]`);
-            const label = document.querySelector(`label[for="addon_check_${addon.id}"]`).textContent;
+            const addonName = checkbox.dataset.addonName;
             html += `<div class="d-flex justify-content-between mb-2">
-                <small>${label.trim()}</small>
+                <small>${addonName}</small>
                 <span>$${addon.price.toFixed(2)}</span>
             </div>`;
             addonsTotal += addon.price;
@@ -662,8 +716,48 @@ function calculateTotal() {
         </div>`;
     }
 
+    // Save as Package button (only show if grand total is available)
+    const monthlyTotal = selectedCorePlan.period === 'monthly' ? grandTotal : grandTotal * 4;
+    html += `<div class="d-grid gap-2 mt-3">
+        <button type="button" class="btn btn-primary" onclick="openSavePackageModal(${monthlyTotal})">
+            <i class="bi bi-box-seam"></i> Save as Package
+        </button>
+    </div>`;
+
     html += '</div>';
     document.getElementById('summary-content').innerHTML = html;
+}
+
+// Open save package modal
+function openSavePackageModal(monthlyTotal) {
+    document.getElementById('package_monthly_tuition').value = monthlyTotal.toFixed(2);
+    document.getElementById('package_core_plan_id').value = selectedCorePlan.id;
+
+    // Set extended care times if applicable
+    if (extendedCareHours > 0) {
+        const startTime = document.getElementById('extendedStartTime').value;
+        const endTime = document.getElementById('extendedEndTime').value;
+        document.getElementById('package_extended_start').value = startTime;
+        document.getElementById('package_extended_end').value = endTime;
+    } else {
+        document.getElementById('package_extended_start').value = '';
+        document.getElementById('package_extended_end').value = '';
+    }
+
+    // Prepare add-ons JSON
+    document.getElementById('package_addons_json').value = JSON.stringify(selectedAddons);
+
+    // Prepare fees JSON
+    const feeIds = selectedFees.map(f => f.id);
+    document.getElementById('package_fees_json').value = JSON.stringify(feeIds);
+
+    // Prepare discounts JSON
+    const discountIds = selectedDiscounts.map(d => d.id);
+    document.getElementById('package_discounts_json').value = JSON.stringify(discountIds);
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('savePackageModal'));
+    modal.show();
 }
 </script>
 {% endblock %}

@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}Enrollment - Staffing Calculator{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h2><i class="bi bi-person-hearts"></i> Enrollment</h2>
+        <p class="text-muted">Manage enrolled children by package</p>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addEnrollmentModal">
+            <i class="bi bi-plus-circle"></i> Add Enrollment
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if not enrollments %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No enrollments yet. Click "Add Enrollment" to add children to packages.
+        </div>
+        {% else %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Age Group</th>
+                        <th>Package</th>
+                        <th>Number of Children</th>
+                        <th>Monthly Tuition (Each)</th>
+                        <th>Total Monthly</th>
+                        <th>Start Date</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for enrollment in enrollments %}
+                    <tr>
+                        <td><span class="badge bg-info">{{ enrollment.age_group.name }}</span></td>
+                        <td>
+                            {{ enrollment.package.name }}<br>
+                            <small class="text-muted">{{ enrollment.package.core_plan.get_schedule_display() }}</small>
+                        </td>
+                        <td><strong class="text-primary">{{ enrollment.child_count }}</strong> children</td>
+                        <td>${{ "%.2f"|format(enrollment.package.monthly_tuition) }}</td>
+                        <td><strong class="text-success">${{ "%.2f"|format(enrollment.package.monthly_tuition * enrollment.child_count) }}</strong></td>
+                        <td>{{ enrollment.start_date.strftime('%m/%d/%Y') }}</td>
+                        <td>
+                            <span class="badge {% if enrollment.status == 'active' %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ enrollment.status|title }}
+                            </span>
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-primary"
+                                    data-bs-toggle="modal" data-bs-target="#editEnrollmentModal{{ enrollment.id }}"
+                                    title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <form method="POST" action="{{ url_for('toggle_enrollment_status', id=enrollment.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-warning" title="Toggle Status">
+                                    <i class="bi bi-toggle-{{ 'on' if enrollment.status == 'active' else 'off' }}"></i>
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ url_for('delete_enrollment', id=enrollment.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-danger"
+                                        onclick="return confirm('Remove this enrollment ({{ enrollment.child_count }} children)?')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Edit Enrollment Modals -->
+        {% for enrollment in enrollments %}
+        <div class="modal fade" id="editEnrollmentModal{{ enrollment.id }}" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Enrollment</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form method="POST" action="{{ url_for('edit_enrollment', id=enrollment.id) }}">
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label for="edit_age_group_{{ enrollment.id }}" class="form-label">Age Group</label>
+                                <select class="form-select" id="edit_age_group_{{ enrollment.id }}" name="age_group_id" required>
+                                    {% for ag in age_groups %}
+                                    <option value="{{ ag.id }}" {% if ag.id == enrollment.age_group_id %}selected{% endif %}>{{ ag.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_package_{{ enrollment.id }}" class="form-label">Enrollment Package</label>
+                                <select class="form-select" id="edit_package_{{ enrollment.id }}" name="enrollment_package_id" required>
+                                    {% for package in packages %}
+                                    <option value="{{ package.id }}" {% if package.id == enrollment.enrollment_package_id %}selected{% endif %}>
+                                        {{ package.name }} - ${{ "%.2f"|format(package.monthly_tuition) }}/month
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_child_count_{{ enrollment.id }}" class="form-label">Number of Children</label>
+                                <input type="number" class="form-control" id="edit_child_count_{{ enrollment.id }}"
+                                       name="child_count" min="1" value="{{ enrollment.child_count }}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_start_date_{{ enrollment.id }}" class="form-label">Start Date</label>
+                                <input type="date" class="form-control" id="edit_start_date_{{ enrollment.id }}"
+                                       name="start_date" value="{{ enrollment.start_date.strftime('%Y-%m-%d') }}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_notes_{{ enrollment.id }}" class="form-label">Notes (Optional)</label>
+                                <textarea class="form-control" id="edit_notes_{{ enrollment.id }}" name="notes" rows="2">{{ enrollment.notes or '' }}</textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i> Update Enrollment
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        {% endif %}
+    </div>
+</div>
+
+<!-- Add Enrollment Modal -->
+<div class="modal fade" id="addEnrollmentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Add Enrollment</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_enrollment') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="age_group" class="form-label">Age Group</label>
+                        <select class="form-select" id="age_group" name="age_group_id" required>
+                            <option value="">Select Age Group</option>
+                            {% for ag in age_groups %}
+                            <option value="{{ ag.id }}">{{ ag.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="package" class="form-label">Enrollment Package</label>
+                        <select class="form-select" id="package" name="enrollment_package_id" required>
+                            <option value="">Select Package</option>
+                            {% for package in packages %}
+                            <option value="{{ package.id }}">
+                                {{ package.name }} - ${{ "%.2f"|format(package.monthly_tuition) }}/month
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">
+                            Don't see the package you need? <a href="{{ url_for('pricing_calculator') }}">Create one</a>
+                        </small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="child_count" class="form-label">Number of Children</label>
+                        <input type="number" class="form-control" id="child_count" name="child_count"
+                               min="1" value="1" required>
+                        <small class="form-text text-muted">How many children are enrolled in this package?</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="start_date" class="form-label">Start Date</label>
+                        <input type="date" class="form-control" id="start_date" name="start_date" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes (Optional)</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Add Enrollment
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
