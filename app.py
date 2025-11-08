@@ -170,7 +170,6 @@ class Enrollment(db.Model):
     enrollment_package_id = db.Column(db.Integer, db.ForeignKey('enrollment_package.id'), nullable=False)
     age_group_id = db.Column(db.Integer, db.ForeignKey('age_group.id'), nullable=False)
     child_count = db.Column(db.Integer, nullable=False, default=1)  # Number of children
-    start_date = db.Column(db.Date, nullable=False)
     status = db.Column(db.String(20), default='active')  # 'active' or 'inactive'
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -917,13 +916,11 @@ def manage_enrollment():
 
 @app.route('/enrollment/add', methods=['POST'])
 def add_enrollment():
-    from datetime import datetime
     data = request.form
     enrollment = Enrollment(
         enrollment_package_id=int(data['enrollment_package_id']),
         age_group_id=int(data['age_group_id']),
         child_count=int(data['child_count']),
-        start_date=datetime.strptime(data['start_date'], '%Y-%m-%d').date(),
         status=data.get('status', 'active'),
         notes=data.get('notes', '')
     )
@@ -947,107 +944,100 @@ def toggle_enrollment_status(id):
 
 @app.route('/enrollment/edit/<int:id>', methods=['POST'])
 def edit_enrollment(id):
-    from datetime import datetime
     enrollment = Enrollment.query.get_or_404(id)
     data = request.form
     enrollment.enrollment_package_id = int(data['enrollment_package_id'])
     enrollment.age_group_id = int(data['age_group_id'])
     enrollment.child_count = int(data['child_count'])
-    enrollment.start_date = datetime.strptime(data['start_date'], '%Y-%m-%d').date()
     enrollment.notes = data.get('notes', '')
     db.session.commit()
     return redirect(url_for('manage_enrollment'))
 
 # Schedule Routes
 @app.route('/schedule')
-@app.route('/schedule/<int:year>/<int:month>')
-def monthly_schedule(year=None, month=None):
-    """View monthly schedule of enrolled children"""
-    from datetime import date
-    from calendar import monthrange, monthcalendar, day_name
+def monthly_schedule():
+    """View typical monthly schedule pattern"""
 
-    # Default to current month if not specified
-    today = date.today()
-    year = year or today.year
-    month = month or today.month
-
-    # Get calendar data
-    cal = monthcalendar(year, month)
-    month_name = date(year, month, 1).strftime('%B %Y')
+    # Create a simple 4-week calendar with just day-of-week patterns
+    # Each "day" is just labeled Mon, Tue, Wed, Thu, Fri
+    days_of_week = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 
     # Get all active enrollments
     enrollments = Enrollment.query.filter_by(status='active').all()
 
-    # Build schedule data for each day
+    # Build schedule data for each day of the week
     schedule_data = {}
-    for week in cal:
-        for day in week:
-            if day == 0:  # Skip empty days from previous/next month
-                continue
+    for day_name in days_of_week:
+        day_attr = day_name.lower()
+        total_children = 0
+        attending_enrollments = []
 
-            day_date = date(year, month, day)
-            day_name_str = day_date.strftime('%A')
+        for enrollment in enrollments:
+            # Check if package includes this day of the week
+            core_plan = enrollment.package.core_plan
 
-            # Determine attendance count for this day
-            total_children = 0
-            attending_enrollments = []
+            if hasattr(core_plan, day_attr) and getattr(core_plan, day_attr):
+                total_children += enrollment.child_count
+                attending_enrollments.append({
+                    'enrollment': enrollment,
+                    'count': enrollment.child_count,
+                    'core_start': core_plan.start_time,
+                    'core_end': core_plan.end_time,
+                    'extended_start': enrollment.package.extended_care_start_time,
+                    'extended_end': enrollment.package.extended_care_end_time
+                })
 
-            for enrollment in enrollments:
-                # Check if enrollment started by this date
-                if enrollment.start_date > day_date:
-                    continue
+        schedule_data[day_name] = {
+            'day_name': day_name,
+            'total_children': total_children,
+            'enrollments': attending_enrollments
+        }
 
-                # Check if package includes this day
-                core_plan = enrollment.package.core_plan
-                day_attr = day_name_str.lower()
-
-                if hasattr(core_plan, day_attr) and getattr(core_plan, day_attr):
-                    total_children += enrollment.child_count
-                    attending_enrollments.append({
-                        'enrollment': enrollment,
-                        'count': enrollment.child_count,
-                        'core_start': core_plan.start_time,
-                        'core_end': core_plan.end_time,
-                        'extended_start': enrollment.package.extended_care_start_time,
-                        'extended_end': enrollment.package.extended_care_end_time
-                    })
-
-            schedule_data[day] = {
-                'date': day_date,
-                'day_name': day_name_str,
-                'total_children': total_children,
-                'enrollments': attending_enrollments
-            }
+    # Create a simple 4-week calendar structure for display
+    calendar = []
+    for week in range(4):
+        calendar.append(days_of_week[:])
 
     return render_template('schedule_monthly.html',
-                         year=year,
-                         month=month,
-                         month_name=month_name,
-                         calendar=cal,
+                         month_name="Typical Month",
+                         calendar=calendar,
                          schedule_data=schedule_data,
                          age_groups=AgeGroup.query.all())
 
-@app.route('/schedule/daily/<date_str>')
-def daily_schedule(date_str):
-    """View detailed schedule for a specific day"""
+def format_time_12hr(time_str):
+    """Convert time to 12-hour format like '9:00 AM'"""
     from datetime import datetime
+    if not time_str:
+        return ''
+
+    # Handle formats like "08:00 AM" or "08:00" or "8:00 AM"
+    try:
+        # Try parsing with AM/PM first
+        if 'AM' in time_str or 'PM' in time_str:
+            dt = datetime.strptime(time_str.strip(), '%I:%M %p')
+        else:
+            dt = datetime.strptime(time_str.strip(), '%H:%M')
+
+        # Format as "9:00 AM" (no leading zero for hour)
+        return dt.strftime('%-I:%M %p' if dt.strftime('%p') else '%I:%M %p').lstrip('0')
+    except:
+        return time_str
+
+@app.route('/schedule/daily/<day_name_str>')
+def daily_schedule(day_name_str):
+    """View detailed schedule for a specific day of the week"""
     import json
 
-    try:
-        day_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-    except ValueError:
-        return jsonify({'error': 'Invalid date format'}), 400
-
-    day_name_str = day_date.strftime('%A')
+    # Validate day name
+    valid_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    if day_name_str not in valid_days:
+        return jsonify({'error': 'Invalid day name'}), 400
 
     # Get all active enrollments attending this day
     enrollments = Enrollment.query.filter_by(status='active').all()
     attending = []
 
     for enrollment in enrollments:
-        if enrollment.start_date > day_date:
-            continue
-
         core_plan = enrollment.package.core_plan
         day_attr = day_name_str.lower()
 
@@ -1061,8 +1051,8 @@ def daily_schedule(date_str):
                 'count': enrollment.child_count,
                 'age_group': enrollment.age_group.name,
                 'age_group_id': enrollment.age_group_id,
-                'start_time': start_time,
-                'end_time': end_time,
+                'start_time': format_time_12hr(start_time),
+                'end_time': format_time_12hr(end_time),
                 'core_start': core_plan.start_time,
                 'core_end': core_plan.end_time,
                 'package_name': enrollment.package.name
@@ -1090,9 +1080,8 @@ def daily_schedule(date_str):
         age_group_counts[ag_id]['required_staff'] = required
 
     return jsonify({
-        'date': date_str,
         'day_name': day_name_str,
-        'total_children': len(attending),
+        'total_children': sum(item['count'] for item in attending),
         'children': attending,
         'age_group_breakdown': list(age_group_counts.values()),
         'total_staff_required': sum(ag['required_staff'] for ag in age_group_counts.values())
@@ -1235,9 +1224,7 @@ def initialize_db():
         db.session.add(kellys_corner)
         db.session.commit()
 
-    return redirect(url_for('index'))
-
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()
+        initialize_db()
     app.run(host='0.0.0.0', port=5000, debug=True)

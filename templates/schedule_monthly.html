@@ -1,25 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Monthly Schedule - Staffing Calculator{% endblock %}
+{% block title %}Schedule Planning - Staffing Calculator{% endblock %}
 
 {% block content %}
 <div class="row mb-3">
     <div class="col">
-        <h2><i class="bi bi-calendar-month"></i> Monthly Schedule</h2>
-        <p class="text-muted">View enrolled children and staffing requirements by day</p>
-    </div>
-    <div class="col-auto">
-        <div class="btn-group">
-            <a href="{{ url_for('monthly_schedule', year=year, month=month-1 if month > 1 else 12) }}"
-               class="btn btn-outline-primary">
-                <i class="bi bi-chevron-left"></i> Previous
-            </a>
-            <button class="btn btn-primary" disabled>{{ month_name }}</button>
-            <a href="{{ url_for('monthly_schedule', year=year, month=month+1 if month < 12 else 1) }}"
-               class="btn btn-outline-primary">
-                Next <i class="bi bi-chevron-right"></i>
-            </a>
-        </div>
+        <h2><i class="bi bi-calendar-month"></i> Schedule Planning</h2>
+        <p class="text-muted">Typical monthly schedule based on enrollment packages (for planning purposes)</p>
     </div>
 </div>
 
@@ -29,35 +16,28 @@
             <table class="table table-bordered text-center">
                 <thead>
                     <tr>
-                        <th class="bg-light">Sunday</th>
                         <th class="bg-light">Monday</th>
                         <th class="bg-light">Tuesday</th>
                         <th class="bg-light">Wednesday</th>
                         <th class="bg-light">Thursday</th>
                         <th class="bg-light">Friday</th>
-                        <th class="bg-light">Saturday</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for week in calendar %}
                     <tr>
-                        {% for day in week %}
-                        <td class="align-top p-2" style="height: 120px; width: 14.28%;">
-                            {% if day == 0 %}
-                            <!-- Empty cell for days from other months -->
-                            {% else %}
+                        {% for day_name in week %}
+                        <td class="align-top p-2" style="height: 120px; width: 20%;">
                             <div class="d-flex justify-content-between align-items-start mb-1">
-                                <span class="badge bg-secondary">{{ day }}</span>
-                                {% if schedule_data[day]['total_children'] > 0 %}
-                                <span class="badge bg-primary">{{ schedule_data[day]['total_children'] }}</span>
+                                <span class="badge bg-secondary">{{ day_name[:3] }}</span>
+                                {% if schedule_data[day_name]['total_children'] > 0 %}
+                                <span class="badge bg-primary">{{ schedule_data[day_name]['total_children'] }}</span>
                                 {% endif %}
                             </div>
 
-                            {% if schedule_data[day]['day_name'] in ['Saturday', 'Sunday'] %}
-                            <small class="text-muted d-block">Closed</small>
-                            {% elif schedule_data[day]['total_children'] > 0 %}
+                            {% if schedule_data[day_name]['total_children'] > 0 %}
                             <div class="small">
-                                {% for item in schedule_data[day]['enrollments'][:3] %}
+                                {% for item in schedule_data[day_name]['enrollments'][:3] %}
                                 <div class="text-truncate">
                                     <span class="badge bg-info" style="font-size: 0.7rem;">
                                         {{ item['enrollment'].age_group.name[:3] }}
@@ -65,17 +45,16 @@
                                     {{ item['count'] }} in {{ item['enrollment'].package.name }}
                                 </div>
                                 {% endfor %}
-                                {% if schedule_data[day]['enrollments']|length > 3 %}
-                                <div class="text-muted">+{{ schedule_data[day]['enrollments']|length - 3 }} more</div>
+                                {% if schedule_data[day_name]['enrollments']|length > 3 %}
+                                <div class="text-muted">+{{ schedule_data[day_name]['enrollments']|length - 3 }} more</div>
                                 {% endif %}
                                 <button class="btn btn-sm btn-outline-primary mt-1 w-100"
-                                        onclick="viewDayDetails('{{ schedule_data[day]['date'].strftime('%Y-%m-%d') }}')">
+                                        onclick="viewDayDetails('{{ day_name }}')">
                                     View Details
                                 </button>
                             </div>
                             {% else %}
                             <small class="text-muted">No children</small>
-                            {% endif %}
                             {% endif %}
                         </td>
                         {% endfor %}
@@ -125,12 +104,79 @@ async function viewDayDetails(dateStr) {
         const response = await fetch(`/schedule/daily/${dateStr}`);
         const data = await response.json();
 
-        titleEl.textContent = `${data.day_name}, ${dateStr}`;
+        titleEl.textContent = data.day_name;
+
+        // Helper to convert time to minutes since midnight
+        function timeToMinutes(timeStr) {
+            const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+            if (!match) return 0;
+            let hours = parseInt(match[1]);
+            const minutes = parseInt(match[2]);
+            const period = match[3].toUpperCase();
+            if (period === 'PM' && hours !== 12) hours += 12;
+            if (period === 'AM' && hours === 12) hours = 0;
+            return hours * 60 + minutes;
+        }
+
+        // Find earliest and latest times for timeline
+        let earliestTime = 24 * 60;
+        let latestTime = 0;
+        data.children.forEach(enrollment => {
+            const start = timeToMinutes(enrollment.start_time);
+            const end = timeToMinutes(enrollment.end_time);
+            earliestTime = Math.min(earliestTime, start);
+            latestTime = Math.max(latestTime, end);
+        });
+
+        // Round to nearest hour
+        earliestTime = Math.floor(earliestTime / 60) * 60;
+        latestTime = Math.ceil(latestTime / 60) * 60;
+        const totalMinutes = latestTime - earliestTime;
 
         let html = `
             <div class="alert alert-info">
                 <strong>Total Children:</strong> ${data.total_children} |
                 <strong>Total Staff Required:</strong> ${data.total_staff_required}
+            </div>
+
+            <h6 class="border-bottom pb-2">Timeline</h6>
+            <div class="mb-4" style="position: relative; height: ${data.children.length * 40 + 40}px;">
+                <div style="position: absolute; top: 0; left: 60px; right: 0; height: 100%; border-left: 2px solid #dee2e6;">
+        `;
+
+        // Add time markers
+        for (let time = earliestTime; time <= latestTime; time += 60) {
+            const hours = Math.floor(time / 60);
+            const period = hours >= 12 ? 'PM' : 'AM';
+            const displayHour = hours === 0 ? 12 : (hours > 12 ? hours - 12 : hours);
+            const position = ((time - earliestTime) / totalMinutes) * 100;
+            html += `
+                <div style="position: absolute; left: ${position}%; top: 0; height: 100%; border-left: 1px solid #dee2e6;">
+                    <span style="position: absolute; top: 0; left: -20px; font-size: 0.75rem; color: #6c757d;">${displayHour} ${period}</span>
+                </div>
+            `;
+        }
+
+        // Add enrollment bars
+        data.children.forEach((enrollment, index) => {
+            const start = timeToMinutes(enrollment.start_time);
+            const end = timeToMinutes(enrollment.end_time);
+            const leftPercent = ((start - earliestTime) / totalMinutes) * 100;
+            const widthPercent = ((end - start) / totalMinutes) * 100;
+            const top = 25 + (index * 40);
+
+            const colors = ['#0dcaf0', '#198754', '#ffc107', '#dc3545', '#6f42c1'];
+            const color = colors[index % colors.length];
+
+            html += `
+                <div style="position: absolute; left: ${leftPercent}%; top: ${top}px; width: ${widthPercent}%; height: 30px; background: ${color}; border-radius: 4px; padding: 4px 8px; color: white; font-size: 0.75rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                    <strong>${enrollment.count}</strong> ${enrollment.age_group} - ${enrollment.package_name}
+                </div>
+            `;
+        });
+
+        html += `
+                </div>
             </div>
 
             <h6 class="border-bottom pb-2">Age Group Breakdown</h6>
@@ -153,35 +199,6 @@ async function viewDayDetails(dateStr) {
         });
 
         html += `
-            </div>
-            <h6 class="border-bottom pb-2 mt-3">Enrollments</h6>
-            <div class="table-responsive">
-                <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>Count</th>
-                            <th>Age Group</th>
-                            <th>Package</th>
-                            <th>Time</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
-
-        data.children.forEach(enrollment => {
-            html += `
-                <tr>
-                    <td><strong>${enrollment.count} children</strong></td>
-                    <td><span class="badge bg-info">${enrollment.age_group}</span></td>
-                    <td>${enrollment.package_name}</td>
-                    <td>${enrollment.start_time} - ${enrollment.end_time}</td>
-                </tr>
-            `;
-        });
-
-        html += `
-                    </tbody>
-                </table>
             </div>
         `;
 

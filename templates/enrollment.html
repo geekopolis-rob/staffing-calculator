@@ -31,13 +31,13 @@
                         <th>Number of Children</th>
                         <th>Monthly Tuition (Each)</th>
                         <th>Total Monthly</th>
-                        <th>Start Date</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for enrollment in enrollments %}
+                    {% if enrollment.package %}
                     <tr>
                         <td><span class="badge bg-info">{{ enrollment.age_group.name }}</span></td>
                         <td>
@@ -47,7 +47,6 @@
                         <td><strong class="text-primary">{{ enrollment.child_count }}</strong> children</td>
                         <td>${{ "%.2f"|format(enrollment.package.monthly_tuition) }}</td>
                         <td><strong class="text-success">${{ "%.2f"|format(enrollment.package.monthly_tuition * enrollment.child_count) }}</strong></td>
-                        <td>{{ enrollment.start_date.strftime('%m/%d/%Y') }}</td>
                         <td>
                             <span class="badge {% if enrollment.status == 'active' %}bg-success{% else %}bg-secondary{% endif %}">
                                 {{ enrollment.status|title }}
@@ -72,6 +71,7 @@
                             </form>
                         </td>
                     </tr>
+                    {% endif %}
                     {% endfor %}
                 </tbody>
             </table>
@@ -110,11 +110,6 @@
                                 <label for="edit_child_count_{{ enrollment.id }}" class="form-label">Number of Children</label>
                                 <input type="number" class="form-control" id="edit_child_count_{{ enrollment.id }}"
                                        name="child_count" min="1" value="{{ enrollment.child_count }}" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="edit_start_date_{{ enrollment.id }}" class="form-label">Start Date</label>
-                                <input type="date" class="form-control" id="edit_start_date_{{ enrollment.id }}"
-                                       name="start_date" value="{{ enrollment.start_date.strftime('%Y-%m-%d') }}" required>
                             </div>
                             <div class="mb-3">
                                 <label for="edit_notes_{{ enrollment.id }}" class="form-label">Notes (Optional)</label>
@@ -175,10 +170,6 @@
                         <input type="number" class="form-control" id="child_count" name="child_count"
                                min="1" value="1" required>
                         <small class="form-text text-muted">How many children are enrolled in this package?</small>
-                    </div>
-                    <div class="mb-3">
-                        <label for="start_date" class="form-label">Start Date</label>
-                        <input type="date" class="form-control" id="start_date" name="start_date" required>
                     </div>
                     <div class="mb-3">
                         <label for="notes" class="form-label">Notes (Optional)</label>
