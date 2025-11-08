@@ -8,6 +8,23 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///staffing.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
+# Template filters
+@app.template_filter('format_time')
+def format_time_filter(time_str):
+    """Convert time to 12-hour format like '9:00 AM'"""
+    if not time_str:
+        return ''
+    try:
+        # Try parsing with AM/PM first
+        if 'AM' in time_str or 'PM' in time_str:
+            dt = datetime.strptime(time_str.strip(), '%I:%M %p')
+        else:
+            dt = datetime.strptime(time_str.strip(), '%H:%M')
+        # Format as "9:00 AM" (no leading zero for hour)
+        return dt.strftime('%-I:%M %p').lstrip('0') if '%-I' in dt.strftime('%-I:%M %p') else dt.strftime('%I:%M %p').lstrip('0')
+    except:
+        return time_str
+
 # Database Models
 class AgeGroup(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -117,6 +134,7 @@ class Discount(db.Model):
 class EnrollmentPackage(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
+    short_code = db.Column(db.String(10), nullable=True)  # Short code for calendar display
     description = db.Column(db.Text)
     age_group_id = db.Column(db.Integer, db.ForeignKey('age_group.id'), nullable=True)
     core_plan_id = db.Column(db.Integer, db.ForeignKey('core_plan.id'), nullable=False)
@@ -846,6 +864,7 @@ def add_package():
     data = request.form
     package = EnrollmentPackage(
         name=data['name'],
+        short_code=data.get('short_code', ''),
         description=data.get('description', ''),
         age_group_id=int(data['age_group_id']) if data.get('age_group_id') else None,
         core_plan_id=int(data['core_plan_id']),
@@ -1055,7 +1074,7 @@ def daily_schedule(day_name_str):
                 'end_time': format_time_12hr(end_time),
                 'core_start': core_plan.start_time,
                 'core_end': core_plan.end_time,
-                'package_name': enrollment.package.name
+                'package_name': enrollment.package.short_code or enrollment.package.name
             })
 
     # Calculate required staffing by age group and time slot

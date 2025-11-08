@@ -51,7 +51,7 @@
                         <td>
                             {% if package.extended_care_start_time and package.extended_care_end_time %}
                             <span class="badge bg-info">
-                                {{ package.extended_care_start_time }} - {{ package.extended_care_end_time }}
+                                {{ package.extended_care_start_time|format_time }} - {{ package.extended_care_end_time|format_time }}
                             </span>
                             {% else %}
                             <span class="text-muted">—</span>
@@ -120,7 +120,7 @@
                         {% if package.extended_care_start_time and package.extended_care_end_time %}
                         <h6 class="border-bottom pb-2">Extended Care</h6>
                         <div class="mb-3">
-                            {{ package.extended_care_start_time }} - {{ package.extended_care_end_time }}
+                            {{ package.extended_care_start_time|format_time }} - {{ package.extended_care_end_time|format_time }}
                         </div>
                         {% endif %}
 

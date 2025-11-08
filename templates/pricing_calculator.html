@@ -264,6 +264,12 @@
                                placeholder="e.g., Full-Time with Extended Care" required>
                     </div>
                     <div class="mb-3">
+                        <label for="package_short_code" class="form-label">Short Code (for calendar display)</label>
+                        <input type="text" class="form-control" id="package_short_code" name="short_code"
+                               placeholder="e.g., FT, FT-EC, PT" maxlength="10">
+                        <small class="form-text text-muted">Short code to display on the schedule (10 characters max)</small>
+                    </div>
+                    <div class="mb-3">
                         <label for="package_description" class="form-label">Description (Optional)</label>
                         <textarea class="form-control" id="package_description" name="description" rows="2"></textarea>
                     </div>
