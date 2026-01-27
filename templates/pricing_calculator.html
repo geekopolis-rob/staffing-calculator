@@ -11,79 +11,83 @@
             </div>
             <div class="card-body">
                 <form id="pricingForm">
-                    <!-- Core Plans Section -->
+                    <!-- Step 1: Age Group Selection -->
                     <div class="mb-4">
-                        <h6><i class="bi bi-star-fill"></i> Step 1: Select a Core Plan</h6>
-                        {% if not core_plans %}
-                        <div class="alert alert-warning">No core plans available</div>
-                        {% else %}
-                        <div class="list-group">
-                            {% for plan in core_plans %}
-                            <label class="list-group-item list-group-item-action">
-                                <div class="d-flex w-100 justify-content-between align-items-center">
-                                    <div class="form-check">
-                                        <input class="form-check-input core-plan-radio" type="radio"
-                                               name="core_plan" value="{{ plan.id }}"
-                                               data-price="{{ plan.base_price }}"
-                                               data-period="{{ plan.billing_period }}"
-                                               data-days-count="{{ plan.get_days_count() }}"
-                                               id="plan_{{ plan.id }}">
-                                        <label class="form-check-label" for="plan_{{ plan.id }}">
-                                            <strong>{{ plan.name }}</strong>
-                                            {% if plan.description %}
-                                            <br><small class="text-muted">{{ plan.description }}</small>
-                                            {% endif %}
-                                            <br><small class="text-muted">
-                                                {{ plan.get_schedule_display() }}
-                                            </small>
-                                        </label>
-                                    </div>
-                                    <span class="badge bg-primary fs-6">
-                                        ${{ "%.2f"|format(plan.base_price) }}/{{ plan.billing_period }}
-                                    </span>
-                                </div>
+                        <h6><i class="bi bi-person-circle"></i> Step 1: Select Age Group</h6>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="age_group_type" id="age_infant" value="infant" autocomplete="off">
+                            <label class="btn btn-outline-primary py-3" for="age_infant">
+                                <i class="bi bi-baby-fill fs-4"></i><br>
+                                <strong>Infant</strong><br>
+                                <small>4 months - 2 years</small>
                             </label>
-                            {% endfor %}
+
+                            <input type="radio" class="btn-check" name="age_group_type" id="age_child" value="child" autocomplete="off">
+                            <label class="btn btn-outline-primary py-3" for="age_child">
+                                <i class="bi bi-person-fill fs-4"></i><br>
+                                <strong>Child</strong><br>
+                                <small>2+ years</small>
+                            </label>
                         </div>
-                        {% endif %}
                     </div>
 
-                    <!-- Extended Care Section -->
-                    <div class="mb-4" id="extendedCareSection" style="display: none;">
-                        <h6>
-                            <i class="bi bi-clock"></i> Step 2: Extended Care (Optional)
-                            <span class="badge bg-success ms-2" id="extendedCareRateBadge" style="display: none;"></span>
-                        </h6>
-                        <div class="card">
-                            <div class="card-body">
-                                <p class="text-muted mb-1">
-                                    Core plan time: <strong id="corePlanTime"></strong>
-                                </p>
-                                <p class="text-muted mb-3" id="extendedCareRate" style="display: none;">
-                                    Extended care rate: <strong id="extendedCareRateDisplay"></strong>
-                                </p>
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label for="extendedStartTime" class="form-label">Drop-off Time</label>
-                                        <input type="time" class="form-control" id="extendedStartTime">
-                                        <small class="form-text text-muted">Choose earlier than core plan start</small>
+                    <!-- Step 2: Schedule Selection -->
+                    <div class="mb-4" id="scheduleSection" style="display: none;">
+                        <h6><i class="bi bi-calendar-week"></i> Step 2: Select Schedule</h6>
+                        <div class="row" id="planCards">
+                            {% for plan in core_plans if plan.is_fixed_plan and plan.is_active %}
+                            <div class="col-md-4 mb-3 plan-card"
+                                 data-age-type="{{ plan.age_group_type }}"
+                                 data-schedule-type="{{ plan.schedule_type }}"
+                                 data-day-pattern="{{ plan.day_pattern }}"
+                                 style="display: none;">
+                                <div class="card h-100 plan-selectable" data-plan-id="{{ plan.id }}">
+                                    <div class="card-header text-white
+                                        {% if plan.schedule_type == 'core' %}bg-info{% else %}bg-success{% endif %}">
+                                        <strong>
+                                            {% if plan.schedule_type == 'core' %}Core Hours{% else %}Extended Hours{% endif %}
+                                        </strong>
                                     </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="extendedEndTime" class="form-label">Pick-up Time</label>
-                                        <input type="time" class="form-control" id="extendedEndTime">
-                                        <small class="form-text text-muted">Choose later than core plan end</small>
+                                    <div class="card-body text-center">
+                                        <p class="mb-2">
+                                            <i class="bi bi-clock"></i>
+                                            {% if plan.schedule_type == 'core' %}
+                                            9:00 AM - 3:00 PM
+                                            {% else %}
+                                            7:30 AM - 5:30 PM
+                                            {% endif %}
+                                        </p>
+                                        <p class="mb-2">
+                                            <i class="bi bi-calendar3"></i>
+                                            {% if plan.day_pattern == 'full' %}Mon - Fri (5 days)
+                                            {% elif plan.day_pattern == 'mwf' %}Mon, Wed, Fri (3 days)
+                                            {% else %}Tue, Thu (2 days)
+                                            {% endif %}
+                                        </p>
+                                        <h4 class="text-success mb-0">${{ plan.base_price|int }}<small>/month</small></h4>
                                     </div>
-                                </div>
-                                <div id="extendedCareCalculation" class="alert alert-info" style="display: none;">
-                                    <strong>Extended Care:</strong> <span id="extendedCareHours"></span>
+                                    <div class="card-footer">
+                                        <div class="form-check">
+                                            <input class="form-check-input plan-radio" type="radio"
+                                                   name="selected_plan" value="{{ plan.id }}"
+                                                   data-price="{{ plan.base_price }}"
+                                                   data-days-count="{{ plan.get_days_count() }}"
+                                                   data-age-type="{{ plan.age_group_type }}"
+                                                   id="plan_{{ plan.id }}">
+                                            <label class="form-check-label" for="plan_{{ plan.id }}">
+                                                Select this plan
+                                            </label>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
+                            {% endfor %}
                         </div>
                     </div>
 
                     <!-- Add-Ons Section -->
                     {% if add_ons %}
-                    <div class="mb-4">
+                    <div class="mb-4" id="addonsSection" style="display: none;">
                         <h6><i class="bi bi-plus-square"></i> Step 3: Select Add-Ons (Optional)</h6>
                         <div class="accordion" id="addonsAccordion">
                             {% for addon in add_ons %}
@@ -314,64 +318,64 @@ let selectedCorePlan = null;
 let selectedAddons = [];
 let selectedFees = [];
 let selectedDiscounts = [];
-let extendedCareHours = 0;
-let extendedCareRate = 0; // Will be set from add-ons
 
-// Find extended care rate from add-ons on page load
-{% for addon in add_ons %}
-{% if addon.is_extended_care and addon.pricing_type == 'time_based' %}
-extendedCareRate = {{ addon.price }};
-{% endif %}
-{% endfor %}
-
-// Helper function to convert time string (like "9:00 AM") to minutes since midnight
-function timeToMinutes(timeStr) {
-    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-    if (!match) return 0;
-
-    let hours = parseInt(match[1]);
-    const minutes = parseInt(match[2]);
-    const period = match[3].toUpperCase();
-
-    if (period === 'PM' && hours !== 12) hours += 12;
-    if (period === 'AM' && hours === 12) hours = 0;
-
-    return hours * 60 + minutes;
-}
-
-// Core plan selection
-document.querySelectorAll('.core-plan-radio').forEach(radio => {
+// Age group selection - filter and show plan cards
+document.querySelectorAll('input[name="age_group_type"]').forEach(radio => {
     radio.addEventListener('change', function() {
-        const label = document.querySelector(`label[for="${this.id}"]`);
-        const scheduleText = label.textContent;
+        const selectedAge = this.value;
 
-        // Extract time range from the schedule text
-        const timeMatch = scheduleText.match(/(\d+:\d+\s*[AP]M)\s*-\s*(\d+:\d+\s*[AP]M)/);
+        // Show schedule section
+        document.getElementById('scheduleSection').style.display = 'block';
+
+        // Reset any previously selected plan
+        document.querySelectorAll('.plan-radio').forEach(r => r.checked = false);
+        document.querySelectorAll('.plan-selectable').forEach(card => {
+            card.classList.remove('border-primary', 'border-3');
+        });
+        selectedCorePlan = null;
+
+        // Hide add-ons section until plan is selected
+        const addonsSection = document.getElementById('addonsSection');
+        if (addonsSection) addonsSection.style.display = 'none';
+
+        // Show/hide plan cards based on age group
+        document.querySelectorAll('.plan-card').forEach(card => {
+            if (card.dataset.ageType === selectedAge) {
+                card.style.display = 'block';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+
+        calculateTotal();
+    });
+});
+
+// Plan card selection
+document.querySelectorAll('.plan-radio').forEach(radio => {
+    radio.addEventListener('change', function() {
+        // Remove highlight from all cards
+        document.querySelectorAll('.plan-selectable').forEach(card => {
+            card.classList.remove('border-primary', 'border-3');
+        });
+
+        // Highlight selected card
+        const card = this.closest('.plan-selectable');
+        if (card) {
+            card.classList.add('border-primary', 'border-3');
+        }
 
         selectedCorePlan = {
             id: this.value,
             price: parseFloat(this.dataset.price),
-            period: this.dataset.period,
+            period: 'monthly',
             daysCount: parseInt(this.dataset.daysCount),
-            startTime: timeMatch ? timeMatch[1] : '9:00 AM',
-            endTime: timeMatch ? timeMatch[2] : '3:00 PM'
+            ageType: this.dataset.ageType
         };
 
-        // Show extended care section and set core plan time display
-        document.getElementById('extendedCareSection').style.display = 'block';
-        document.getElementById('corePlanTime').textContent = `${selectedCorePlan.startTime} - ${selectedCorePlan.endTime}`;
-
-        // Show extended care rate if available
-        if (extendedCareRate > 0) {
-            document.getElementById('extendedCareRate').style.display = 'block';
-            document.getElementById('extendedCareRateDisplay').textContent = `$${extendedCareRate.toFixed(2)}/hour`;
-            document.getElementById('extendedCareRateBadge').style.display = 'inline';
-            document.getElementById('extendedCareRateBadge').textContent = `$${(extendedCareRate / 60).toFixed(2)}/min`;
-        }
-
-        // Set default times in extended care inputs
-        document.getElementById('extendedStartTime').value = convertTo24Hour(selectedCorePlan.startTime);
-        document.getElementById('extendedEndTime').value = convertTo24Hour(selectedCorePlan.endTime);
+        // Show add-ons section
+        const addonsSection = document.getElementById('addonsSection');
+        if (addonsSection) addonsSection.style.display = 'block';
 
         // Update max days for per_day add-ons
         document.querySelectorAll('.addon-quantity').forEach(input => {
@@ -388,95 +392,20 @@ document.querySelectorAll('.core-plan-radio').forEach(radio => {
     });
 });
 
-// Convert 12-hour time to 24-hour format for input[type="time"]
-function convertTo24Hour(time12h) {
-    const match = time12h.match(/(\d+):(\d+)\s*(AM|PM)/i);
-    if (!match) return '09:00';
-
-    let hours = parseInt(match[1]);
-    const minutes = match[2];
-    const period = match[3].toUpperCase();
-
-    if (period === 'PM' && hours !== 12) hours += 12;
-    if (period === 'AM' && hours === 12) hours = 0;
-
-    return `${String(hours).padStart(2, '0')}:${minutes}`;
-}
-
-// Extended care time inputs
-document.getElementById('extendedStartTime').addEventListener('change', calculateExtendedCare);
-document.getElementById('extendedEndTime').addEventListener('change', calculateExtendedCare);
-
-function calculateExtendedCare() {
-    if (!selectedCorePlan) return;
-
-    const inputStart = document.getElementById('extendedStartTime').value;
-    const inputEnd = document.getElementById('extendedEndTime').value;
-
-    if (!inputStart || !inputEnd) return;
-
-    // Convert to minutes
-    const [inputStartHour, inputStartMin] = inputStart.split(':').map(Number);
-    const [inputEndHour, inputEndMin] = inputEnd.split(':').map(Number);
-
-    const inputStartMinutes = inputStartHour * 60 + inputStartMin;
-    const inputEndMinutes = inputEndHour * 60 + inputEndMin;
-
-    const coreStartMinutes = timeToMinutes(selectedCorePlan.startTime);
-    const coreEndMinutes = timeToMinutes(selectedCorePlan.endTime);
-
-    // Calculate extended hours
-    let morningHours = 0;
-    let eveningHours = 0;
-
-    if (inputStartMinutes < coreStartMinutes) {
-        morningHours = (coreStartMinutes - inputStartMinutes) / 60;
-    }
-
-    if (inputEndMinutes > coreEndMinutes) {
-        eveningHours = (inputEndMinutes - coreEndMinutes) / 60;
-    }
-
-    extendedCareHours = morningHours + eveningHours;
-
-    if (extendedCareHours > 0) {
-        document.getElementById('extendedCareCalculation').style.display = 'block';
-
-        // Format hours and minutes
-        const totalMinutes = Math.round(extendedCareHours * 60);
-        const hours = Math.floor(totalMinutes / 60);
-        const minutes = totalMinutes % 60;
-
-        const morningMinutes = Math.round(morningHours * 60);
-        const morningHrs = Math.floor(morningMinutes / 60);
-        const morningMins = morningMinutes % 60;
-
-        const eveningMinutes = Math.round(eveningHours * 60);
-        const eveningHrs = Math.floor(eveningMinutes / 60);
-        const eveningMins = eveningMinutes % 60;
-
-        let timeDisplay = '';
-        if (hours > 0) timeDisplay += `${hours} hour${hours !== 1 ? 's' : ''}`;
-        if (minutes > 0) timeDisplay += ` ${minutes} minute${minutes !== 1 ? 's' : ''}`;
-
-        let beforeDisplay = '';
-        if (morningHrs > 0) beforeDisplay += `${morningHrs} hr${morningHrs !== 1 ? 's' : ''}`;
-        if (morningMins > 0) beforeDisplay += ` ${morningMins} min`;
-        if (!beforeDisplay) beforeDisplay = '0 min';
-
-        let afterDisplay = '';
-        if (eveningHrs > 0) afterDisplay += `${eveningHrs} hr${eveningHrs !== 1 ? 's' : ''}`;
-        if (eveningMins > 0) afterDisplay += ` ${eveningMins} min`;
-        if (!afterDisplay) afterDisplay = '0 min';
-
-        document.getElementById('extendedCareHours').textContent =
-            `${timeDisplay} (${beforeDisplay} before + ${afterDisplay} after)`;
-    } else {
-        document.getElementById('extendedCareCalculation').style.display = 'none';
-    }
-
-    calculateTotal();
-}
+// Make entire card clickable
+document.querySelectorAll('.plan-selectable').forEach(card => {
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', function(e) {
+        // Don't trigger if clicking directly on the radio button
+        if (e.target.type !== 'radio') {
+            const radio = this.querySelector('.plan-radio');
+            if (radio && !radio.disabled) {
+                radio.checked = true;
+                radio.dispatchEvent(new Event('change'));
+            }
+        }
+    });
+});
 
 calculateTotal();
 
@@ -604,22 +533,6 @@ function calculateTotal() {
     let corePlanTotal = selectedCorePlan.price;
     let addonsTotal = 0;
     let feesTotal = 0;
-    let extendedCareTotal = 0;
-
-    // Extended Care
-    if (extendedCareHours > 0 && extendedCareRate > 0) {
-        extendedCareTotal = extendedCareHours * extendedCareRate;
-        const weeksInPeriod = selectedCorePlan.period === 'monthly' ? 4 : 1;
-        const daysPerWeek = 5; // Assume 5 days per week for now
-        extendedCareTotal = extendedCareTotal * daysPerWeek * weeksInPeriod;
-
-        html += '<h6 class="border-bottom pb-2 mt-3">Extended Care</h6>';
-        html += `<div class="d-flex justify-content-between mb-2">
-            <small>${extendedCareHours.toFixed(2)} hrs/day × $${extendedCareRate.toFixed(2)}/hr × ${daysPerWeek} days × ${weeksInPeriod} weeks</small>
-            <span>$${extendedCareTotal.toFixed(2)}</span>
-        </div>`;
-        addonsTotal += extendedCareTotal;
-    }
 
     // Add-ons
     if (selectedAddons.length > 0) {
@@ -739,16 +652,9 @@ function openSavePackageModal(monthlyTotal) {
     document.getElementById('package_monthly_tuition').value = monthlyTotal.toFixed(2);
     document.getElementById('package_core_plan_id').value = selectedCorePlan.id;
 
-    // Set extended care times if applicable
-    if (extendedCareHours > 0) {
-        const startTime = document.getElementById('extendedStartTime').value;
-        const endTime = document.getElementById('extendedEndTime').value;
-        document.getElementById('package_extended_start').value = startTime;
-        document.getElementById('package_extended_end').value = endTime;
-    } else {
-        document.getElementById('package_extended_start').value = '';
-        document.getElementById('package_extended_end').value = '';
-    }
+    // Clear extended care times (no longer used)
+    document.getElementById('package_extended_start').value = '';
+    document.getElementById('package_extended_end').value = '';
 
     // Prepare add-ons JSON
     document.getElementById('package_addons_json').value = JSON.stringify(selectedAddons);

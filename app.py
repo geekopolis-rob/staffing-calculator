@@ -8,6 +8,23 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///staffing.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
+# Plan structure constants
+SCHEDULE_TYPES = {
+    'core': {'name': 'Core Hours', 'start': '9:00 AM', 'end': '3:00 PM'},
+    'extended': {'name': 'Extended Hours', 'start': '7:30 AM', 'end': '5:30 PM'}
+}
+
+DAY_PATTERNS = {
+    'full': {'name': 'Mon-Fri', 'days': ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'], 'count': 5},
+    'mwf': {'name': 'Mon/Wed/Fri', 'days': ['monday', 'wednesday', 'friday'], 'count': 3},
+    'tth': {'name': 'Tue/Thu', 'days': ['tuesday', 'thursday'], 'count': 2}
+}
+
+AGE_GROUP_TYPES = {
+    'infant': {'name': 'Infant', 'description': '4 months - 2 years'},
+    'child': {'name': 'Child', 'description': '2+ years'}
+}
+
 # Template filters
 @app.template_filter('format_time')
 def format_time_filter(time_str):
@@ -70,18 +87,28 @@ class CorePlan(db.Model):
     base_price = db.Column(db.Float, nullable=False)
     billing_period = db.Column(db.String(20), nullable=False)  # 'weekly' or 'monthly'
     age_group_id = db.Column(db.Integer, db.ForeignKey('age_group.id'), nullable=True)  # Optional age group link
+
+    # Fixed plan structure fields
+    schedule_type = db.Column(db.String(20), nullable=True)  # 'core' or 'extended'
+    day_pattern = db.Column(db.String(20), nullable=True)    # 'full', 'mwf', or 'tth'
+    age_group_type = db.Column(db.String(20), nullable=True) # 'infant' or 'child'
+    is_fixed_plan = db.Column(db.Boolean, default=False)
+
+    # Day fields (auto-populated for fixed plans)
     monday = db.Column(db.Boolean, default=True)
     tuesday = db.Column(db.Boolean, default=True)
     wednesday = db.Column(db.Boolean, default=True)
     thursday = db.Column(db.Boolean, default=True)
     friday = db.Column(db.Boolean, default=True)
-    start_time = db.Column(db.String(10), default='9:00 AM')  # e.g., "9:00 AM"
-    end_time = db.Column(db.String(10), default='3:00 PM')  # e.g., "3:00 PM"
+    start_time = db.Column(db.String(10), default='9:00 AM')
+    end_time = db.Column(db.String(10), default='3:00 PM')
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def get_days_selected(self):
         """Returns list of selected day names"""
+        if self.day_pattern and self.day_pattern in DAY_PATTERNS:
+            return [d[:3].title() for d in DAY_PATTERNS[self.day_pattern]['days']]
         days = []
         if self.monday: days.append('Mon')
         if self.tuesday: days.append('Tue')
@@ -92,12 +119,23 @@ class CorePlan(db.Model):
 
     def get_days_count(self):
         """Returns number of days selected"""
+        if self.day_pattern and self.day_pattern in DAY_PATTERNS:
+            return DAY_PATTERNS[self.day_pattern]['count']
         return len(self.get_days_selected())
 
     def get_schedule_display(self):
         """Returns formatted schedule like 'Mon, Wed, Fri 9:00 AM - 3:00 PM'"""
         days_str = ', '.join(self.get_days_selected())
+        if self.schedule_type and self.schedule_type in SCHEDULE_TYPES:
+            schedule = SCHEDULE_TYPES[self.schedule_type]
+            return f"{days_str} {schedule['start']} - {schedule['end']}"
         return f"{days_str} {self.start_time} - {self.end_time}"
+
+    def get_age_group_display(self):
+        """Returns age group label for fixed plans"""
+        if self.age_group_type and self.age_group_type in AGE_GROUP_TYPES:
+            return AGE_GROUP_TYPES[self.age_group_type]['name']
+        return 'All Ages'
 
 class AddOn(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -539,6 +577,68 @@ def calculate_staffing_needs(age_group_data):
 
     return results
 
+def create_fixed_plans():
+    """Create the 12 fixed plan combinations"""
+    # Prices for each combination (schedule_type, day_pattern, age_group_type)
+    base_prices = {
+        ('core', 'full', 'infant'): 1800.00,
+        ('core', 'full', 'child'): 1550.00,
+        ('core', 'mwf', 'infant'): 1400.00,
+        ('core', 'mwf', 'child'): 1250.00,
+        ('core', 'tth', 'infant'): 1100.00,
+        ('core', 'tth', 'child'): 1000.00,
+        ('extended', 'full', 'infant'): 2500.00,
+        ('extended', 'full', 'child'): 2200.00,
+        ('extended', 'mwf', 'infant'): 1950.00,
+        ('extended', 'mwf', 'child'): 1800.00,
+        ('extended', 'tth', 'infant'): 1400.00,
+        ('extended', 'tth', 'child'): 1300.00,
+    }
+
+    created_plans = []
+    for schedule_type in ['core', 'extended']:
+        for day_pattern in ['full', 'mwf', 'tth']:
+            for age_group_type in ['infant', 'child']:
+                # Check if this combination already exists
+                existing = CorePlan.query.filter_by(
+                    schedule_type=schedule_type,
+                    day_pattern=day_pattern,
+                    age_group_type=age_group_type,
+                    is_fixed_plan=True
+                ).first()
+
+                if not existing:
+                    schedule = SCHEDULE_TYPES[schedule_type]
+                    pattern = DAY_PATTERNS[day_pattern]
+                    age = AGE_GROUP_TYPES[age_group_type]
+
+                    name = f"{age['name']} {pattern['name']} {schedule['name']}"
+                    price = base_prices.get((schedule_type, day_pattern, age_group_type), 1000.00)
+
+                    plan = CorePlan(
+                        name=name,
+                        description=f"{age['name']} program ({age['description']}), {pattern['name']}, {schedule['name']}",
+                        base_price=price,
+                        billing_period='monthly',
+                        schedule_type=schedule_type,
+                        day_pattern=day_pattern,
+                        age_group_type=age_group_type,
+                        monday='monday' in pattern['days'],
+                        tuesday='tuesday' in pattern['days'],
+                        wednesday='wednesday' in pattern['days'],
+                        thursday='thursday' in pattern['days'],
+                        friday='friday' in pattern['days'],
+                        start_time=schedule['start'],
+                        end_time=schedule['end'],
+                        is_active=True,
+                        is_fixed_plan=True
+                    )
+                    db.session.add(plan)
+                    created_plans.append(name)
+
+    db.session.commit()
+    return created_plans
+
 # Routes
 @app.route('/')
 def index():
@@ -716,6 +816,22 @@ def edit_core_plan(id):
     plan.end_time = data.get('end_time', '3:00 PM')
     plan.is_active = data.get('is_active') == 'on'
 
+    db.session.commit()
+    return redirect(url_for('manage_pricing'))
+
+@app.route('/pricing/fixed-plans/update', methods=['POST'])
+def update_fixed_plan_prices():
+    """Bulk update prices for all 12 fixed plans"""
+    data = request.form
+    for key, value in data.items():
+        if key.startswith('price_'):
+            plan_id = int(key.replace('price_', ''))
+            plan = CorePlan.query.get(plan_id)
+            if plan and plan.is_fixed_plan:
+                try:
+                    plan.base_price = float(value)
+                except ValueError:
+                    pass
     db.session.commit()
     return redirect(url_for('manage_pricing'))
 
@@ -1162,73 +1278,17 @@ def initialize_db():
             db.session.add(group)
         db.session.commit()
 
-    # Add core plans if none exist
-    if CorePlan.query.count() == 0:
-        full_time = CorePlan(
-            name='Full Time',
-            description='',
-            base_price=1250.0,
-            billing_period='monthly',
-            age_group_id=None,
-            monday=True,
-            tuesday=True,
-            wednesday=True,
-            thursday=True,
-            friday=True,
-            start_time='9:00 AM',
-            end_time='3:00 PM',
-            is_active=True
-        )
+    # Create the 12 fixed plans
+    created_plans = create_fixed_plans()
 
-        part_time = CorePlan(
-            name='Part Time',
-            description='',
-            base_price=950.0,
-            billing_period='monthly',
-            age_group_id=None,
-            monday=True,
-            tuesday=False,
-            wednesday=True,
-            thursday=False,
-            friday=True,
-            start_time='9:00 AM',
-            end_time='3:00 PM',
-            is_active=True
-        )
-
-        intro = CorePlan(
-            name='Intro',
-            description='',
-            base_price=750.0,
-            billing_period='monthly',
-            age_group_id=None,
-            monday=False,
-            tuesday=True,
-            wednesday=False,
-            thursday=True,
-            friday=False,
-            start_time='9:00 AM',
-            end_time='3:00 PM',
-            is_active=True
-        )
-
-        sample_plans = [full_time, part_time, intro]
-        for plan in sample_plans:
-            db.session.add(plan)
-        db.session.commit()
+    # Deactivate any legacy plans that aren't fixed plans
+    legacy_plans = CorePlan.query.filter_by(is_fixed_plan=False).all()
+    for plan in legacy_plans:
+        plan.is_active = False
+    db.session.commit()
 
     # Add add-ons if none exist
     if AddOn.query.count() == 0:
-        extended_care = AddOn(
-            name='Extended Care',
-            description='',
-            pricing_type='time_based',
-            price=15.0,
-            minutes_unit=60,
-            is_extended_care=True,
-            is_active=True
-        )
-
         kellys_corner = AddOn(
             name="Kelly's Corner",
             description='',
@@ -1238,10 +1298,43 @@ def initialize_db():
             is_extended_care=False,
             is_active=True
         )
-
-        db.session.add(extended_care)
         db.session.add(kellys_corner)
         db.session.commit()
+
+    # Deactivate any Extended Care add-ons (extended care is now built into plans)
+    extended_care_addons = AddOn.query.filter_by(is_extended_care=True).all()
+    for addon in extended_care_addons:
+        addon.is_active = False
+    db.session.commit()
+
+    # Add one-time fees if none exist
+    if OneTimeFee.query.count() == 0:
+        registration_fee = OneTimeFee(
+            name='Registration',
+            description='Annual registration fee',
+            amount=100.0,
+            fee_type='registration',
+            is_active=True,
+            is_refundable=False
+        )
+        db.session.add(registration_fee)
+        db.session.commit()
+
+    # Add discounts if none exist
+    if Discount.query.count() == 0:
+        sibling_discount = Discount(
+            name='Sibling',
+            description='Discount for additional siblings',
+            discount_type='percentage',
+            amount=10.0,
+            applies_to='core_plan',
+            conditions='Applied to 2nd child and beyond',
+            is_active=True
+        )
+        db.session.add(sibling_discount)
+        db.session.commit()
+
+    return f"Database initialized. Created {len(created_plans)} fixed plans."
 
 if __name__ == '__main__':
     with app.app_context():

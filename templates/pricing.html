@@ -15,199 +15,196 @@
     </div>
 </div>
 
-<!-- Core Plans Section -->
+<!-- Fixed Plan Pricing Grid -->
 <div class="card mb-4">
-    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-        <h5 class="mb-0"><i class="bi bi-star-fill"></i> Core Plans</h5>
-        <button class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#addCorePlanModal">
-            <i class="bi bi-plus-circle"></i> Add Core Plan
-        </button>
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-grid-3x3"></i> Plan Pricing</h5>
     </div>
     <div class="card-body">
-        {% if not core_plans %}
-        <div class="alert alert-info">
-            <i class="bi bi-info-circle"></i> No core plans configured. Click "Add Core Plan" to create one.
-        </div>
-        {% else %}
-        <div class="table-responsive">
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Price</th>
-                        <th>Billing Period</th>
-                        <th>Schedule</th>
-                        <th>Age Group</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for plan in core_plans %}
-                    <tr>
-                        <td>
-                            <strong>{{ plan.name }}</strong>
-                            {% if plan.description %}
-                            <br><small class="text-muted">{{ plan.description }}</small>
+        <p class="text-muted mb-4">Set prices for all 12 plan combinations. All plans are billed monthly.</p>
+        <form method="POST" action="{{ url_for('update_fixed_plan_prices') }}">
+            <!-- Infant Plans -->
+            <h6 class="mb-3"><i class="bi bi-baby-fill"></i> Infant Plans (4 months - 2 years)</h6>
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 25%">Schedule</th>
+                            <th style="width: 25%">Mon-Fri (5 days)</th>
+                            <th style="width: 25%">Mon/Wed/Fri (3 days)</th>
+                            <th style="width: 25%">Tue/Thu (2 days)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Core Hours</strong><br><small class="text-muted">9:00 AM - 3:00 PM</small></td>
+                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'infant' and plan.schedule_type == 'core' %}
+                            {% if plan.day_pattern == 'full' %}
+                            <td>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
+                                           value="{{ plan.base_price|int }}" step="1" min="0">
+                                </div>
+                            </td>
                             {% endif %}
-                        </td>
-                        <td>${{ "%.2f"|format(plan.base_price) }}</td>
-                        <td><span class="badge bg-info">{{ plan.billing_period|title }}</span></td>
-                        <td>
-                            <small>{{ plan.get_schedule_display() }}</small>
-                        </td>
-                        <td>
-                            {% if plan.age_group_id %}
-                            {% set ag = age_groups|selectattr('id', 'equalto', plan.age_group_id)|first %}
-                            <small>{{ ag.name if ag else 'N/A' }}</small>
-                            {% else %}
-                            <small class="text-muted">All ages</small>
+                            {% endfor %}
+                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'infant' and plan.schedule_type == 'core' %}
+                            {% if plan.day_pattern == 'mwf' %}
+                            <td>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
+                                           value="{{ plan.base_price|int }}" step="1" min="0">
+                                </div>
+                            </td>
                             {% endif %}
-                        </td>
-                        <td>
-                            <span class="badge {% if plan.is_active %}bg-success{% else %}bg-secondary{% endif %}">
-                                {{ 'Active' if plan.is_active else 'Inactive' }}
-                            </span>
-                        </td>
-                        <td>
-                            <button type="button" class="btn btn-sm btn-primary"
-                                    data-bs-toggle="modal" data-bs-target="#editCorePlanModal{{ plan.id }}"
-                                    title="Edit">
-                                <i class="bi bi-pencil"></i>
-                            </button>
-                            <form method="POST" action="{{ url_for('toggle_core_plan', id=plan.id) }}" style="display: inline;">
-                                <button type="submit" class="btn btn-sm btn-warning" title="Toggle Active">
-                                    <i class="bi bi-toggle-{{ 'on' if plan.is_active else 'off' }}"></i>
-                                </button>
-                            </form>
-                            <form method="POST" action="{{ url_for('delete_core_plan', id=plan.id) }}" style="display: inline;">
-                                <button type="submit" class="btn btn-sm btn-danger"
-                                        onclick="return confirm('Delete {{ plan.name }}?')">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Edit Core Plan Modals -->
-        {% for plan in core_plans %}
-        <div class="modal fade" id="editCorePlanModal{{ plan.id }}" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Core Plan</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <form method="POST" action="{{ url_for('edit_core_plan', id=plan.id) }}">
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label for="edit_plan_name_{{ plan.id }}" class="form-label">Plan Name</label>
-                                <input type="text" class="form-control" id="edit_plan_name_{{ plan.id }}"
-                                       name="name" value="{{ plan.name }}" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="edit_plan_description_{{ plan.id }}" class="form-label">Description</label>
-                                <textarea class="form-control" id="edit_plan_description_{{ plan.id }}"
-                                          name="description" rows="2">{{ plan.description or '' }}</textarea>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="edit_plan_price_{{ plan.id }}" class="form-label">Base Price ($)</label>
-                                    <input type="number" class="form-control" id="edit_plan_price_{{ plan.id }}"
-                                           name="base_price" step="0.01" min="0" value="{{ plan.base_price }}" required>
+                            {% endfor %}
+                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'infant' and plan.schedule_type == 'core' %}
+                            {% if plan.day_pattern == 'tth' %}
+                            <td>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
+                                           value="{{ plan.base_price|int }}" step="1" min="0">
                                 </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="edit_plan_billing_{{ plan.id }}" class="form-label">Billing Period</label>
-                                    <select class="form-select" id="edit_plan_billing_{{ plan.id }}" name="billing_period" required>
-                                        <option value="weekly" {% if plan.billing_period == 'weekly' %}selected{% endif %}>Weekly</option>
-                                        <option value="monthly" {% if plan.billing_period == 'monthly' %}selected{% endif %}>Monthly</option>
-                                    </select>
+                            </td>
+                            {% endif %}
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <td><strong>Extended Hours</strong><br><small class="text-muted">7:30 AM - 5:30 PM</small></td>
+                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'infant' and plan.schedule_type == 'extended' %}
+                            {% if plan.day_pattern == 'full' %}
+                            <td>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
+                                           value="{{ plan.base_price|int }}" step="1" min="0">
                                 </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Days of Week</label>
-                                <div class="row">
-                                    <div class="col-md-4">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" name="monday"
-                                                   id="edit_monday_{{ plan.id }}" {% if plan.monday %}checked{% endif %}>
-                                            <label class="form-check-label" for="edit_monday_{{ plan.id }}">Monday</label>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" name="tuesday"
-                                                   id="edit_tuesday_{{ plan.id }}" {% if plan.tuesday %}checked{% endif %}>
-                                            <label class="form-check-label" for="edit_tuesday_{{ plan.id }}">Tuesday</label>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" name="wednesday"
-                                                   id="edit_wednesday_{{ plan.id }}" {% if plan.wednesday %}checked{% endif %}>
-                                            <label class="form-check-label" for="edit_wednesday_{{ plan.id }}">Wednesday</label>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" name="thursday"
-                                                   id="edit_thursday_{{ plan.id }}" {% if plan.thursday %}checked{% endif %}>
-                                            <label class="form-check-label" for="edit_thursday_{{ plan.id }}">Thursday</label>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" name="friday"
-                                                   id="edit_friday_{{ plan.id }}" {% if plan.friday %}checked{% endif %}>
-                                            <label class="form-check-label" for="edit_friday_{{ plan.id }}">Friday</label>
-                                        </div>
-                                    </div>
+                            </td>
+                            {% endif %}
+                            {% endfor %}
+                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'infant' and plan.schedule_type == 'extended' %}
+                            {% if plan.day_pattern == 'mwf' %}
+                            <td>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
+                                           value="{{ plan.base_price|int }}" step="1" min="0">
                                 </div>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="edit_start_time_{{ plan.id }}" class="form-label">Start Time</label>
-                                    <input type="text" class="form-control" id="edit_start_time_{{ plan.id }}"
-                                           name="start_time" value="{{ plan.start_time }}" placeholder="9:00 AM">
+                            </td>
+                            {% endif %}
+                            {% endfor %}
+                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'infant' and plan.schedule_type == 'extended' %}
+                            {% if plan.day_pattern == 'tth' %}
+                            <td>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
+                                           value="{{ plan.base_price|int }}" step="1" min="0">
                                 </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="edit_end_time_{{ plan.id }}" class="form-label">End Time</label>
-                                    <input type="text" class="form-control" id="edit_end_time_{{ plan.id }}"
-                                           name="end_time" value="{{ plan.end_time }}" placeholder="3:00 PM">
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="edit_plan_age_group_{{ plan.id }}" class="form-label">Age Group (Optional)</label>
-                                <select class="form-select" id="edit_plan_age_group_{{ plan.id }}" name="age_group_id">
-                                    <option value="">All Age Groups</option>
-                                    {% for ag in age_groups %}
-                                    <option value="{{ ag.id }}" {% if plan.age_group_id == ag.id %}selected{% endif %}>{{ ag.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="edit_plan_active_{{ plan.id }}"
-                                       name="is_active" {% if plan.is_active %}checked{% endif %}>
-                                <label class="form-check-label" for="edit_plan_active_{{ plan.id }}">Active</label>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-save"></i> Update Plan
-                            </button>
-                        </div>
-                    </form>
-                </div>
+                            </td>
+                            {% endif %}
+                            {% endfor %}
+                        </tr>
+                    </tbody>
+                </table>
             </div>
-        </div>
-        {% endfor %}
 
-        {% endif %}
+            <!-- Child Plans -->
+            <h6 class="mb-3"><i class="bi bi-people-fill"></i> Child Plans (2+ years)</h6>
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 25%">Schedule</th>
+                            <th style="width: 25%">Mon-Fri (5 days)</th>
+                            <th style="width: 25%">Mon/Wed/Fri (3 days)</th>
+                            <th style="width: 25%">Tue/Thu (2 days)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Core Hours</strong><br><small class="text-muted">9:00 AM - 3:00 PM</small></td>
+                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'child' and plan.schedule_type == 'core' %}
+                            {% if plan.day_pattern == 'full' %}
+                            <td>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
+                                           value="{{ plan.base_price|int }}" step="1" min="0">
+                                </div>
+                            </td>
+                            {% endif %}
+                            {% endfor %}
+                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'child' and plan.schedule_type == 'core' %}
+                            {% if plan.day_pattern == 'mwf' %}
+                            <td>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
+                                           value="{{ plan.base_price|int }}" step="1" min="0">
+                                </div>
+                            </td>
+                            {% endif %}
+                            {% endfor %}
+                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'child' and plan.schedule_type == 'core' %}
+                            {% if plan.day_pattern == 'tth' %}
+                            <td>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
+                                           value="{{ plan.base_price|int }}" step="1" min="0">
+                                </div>
+                            </td>
+                            {% endif %}
+                            {% endfor %}
+                        </tr>
+                        <tr>
+                            <td><strong>Extended Hours</strong><br><small class="text-muted">7:30 AM - 5:30 PM</small></td>
+                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'child' and plan.schedule_type == 'extended' %}
+                            {% if plan.day_pattern == 'full' %}
+                            <td>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
+                                           value="{{ plan.base_price|int }}" step="1" min="0">
+                                </div>
+                            </td>
+                            {% endif %}
+                            {% endfor %}
+                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'child' and plan.schedule_type == 'extended' %}
+                            {% if plan.day_pattern == 'mwf' %}
+                            <td>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
+                                           value="{{ plan.base_price|int }}" step="1" min="0">
+                                </div>
+                            </td>
+                            {% endif %}
+                            {% endfor %}
+                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'child' and plan.schedule_type == 'extended' %}
+                            {% if plan.day_pattern == 'tth' %}
+                            <td>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
+                                           value="{{ plan.base_price|int }}" step="1" min="0">
+                                </div>
+                            </td>
+                            {% endif %}
+                            {% endfor %}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-save"></i> Save All Prices
+            </button>
+        </form>
     </div>
 </div>
 
@@ -646,110 +643,6 @@
         {% endfor %}
 
         {% endif %}
-    </div>
-</div>
-
-<!-- Add Core Plan Modal -->
-<div class="modal fade" id="addCorePlanModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Add Core Plan</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" action="{{ url_for('add_core_plan') }}">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="plan_name" class="form-label">Plan Name</label>
-                        <input type="text" class="form-control" id="plan_name" name="name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="plan_description" class="form-label">Description</label>
-                        <textarea class="form-control" id="plan_description" name="description" rows="2"></textarea>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="plan_price" class="form-label">Base Price ($)</label>
-                            <input type="number" class="form-control" id="plan_price" name="base_price"
-                                   step="0.01" min="0" required>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="plan_billing" class="form-label">Billing Period</label>
-                            <select class="form-select" id="plan_billing" name="billing_period" required>
-                                <option value="weekly">Weekly</option>
-                                <option value="monthly" selected>Monthly</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Days of Week</label>
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="monday" id="plan_monday" checked>
-                                    <label class="form-check-label" for="plan_monday">Monday</label>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="tuesday" id="plan_tuesday" checked>
-                                    <label class="form-check-label" for="plan_tuesday">Tuesday</label>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="wednesday" id="plan_wednesday" checked>
-                                    <label class="form-check-label" for="plan_wednesday">Wednesday</label>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="thursday" id="plan_thursday" checked>
-                                    <label class="form-check-label" for="plan_thursday">Thursday</label>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" name="friday" id="plan_friday" checked>
-                                    <label class="form-check-label" for="plan_friday">Friday</label>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="plan_start_time" class="form-label">Start Time</label>
-                            <input type="text" class="form-control" id="plan_start_time" name="start_time"
-                                   value="9:00 AM" placeholder="9:00 AM">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="plan_end_time" class="form-label">End Time</label>
-                            <input type="text" class="form-control" id="plan_end_time" name="end_time"
-                                   value="3:00 PM" placeholder="3:00 PM">
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label for="plan_age_group" class="form-label">Age Group (Optional)</label>
-                        <select class="form-select" id="plan_age_group" name="age_group_id">
-                            <option value="">All Age Groups</option>
-                            {% for ag in age_groups %}
-                            <option value="{{ ag.id }}">{{ ag.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="plan_active" name="is_active" checked>
-                        <label class="form-check-label" for="plan_active">Active</label>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-save"></i> Save Plan
-                    </button>
-                </div>
-            </form>
-        </div>
     </div>
 </div>
 
