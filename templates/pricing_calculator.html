@@ -17,14 +17,14 @@
                         <div class="btn-group w-100" role="group">
                             <input type="radio" class="btn-check" name="age_group_type" id="age_infant" value="infant" autocomplete="off">
                             <label class="btn btn-outline-primary py-3" for="age_infant">
-                                <i class="bi bi-baby-fill fs-4"></i><br>
+                                <span class="fs-4">👶</span><br>
                                 <strong>Infant</strong><br>
                                 <small>4 months - 2 years</small>
                             </label>
 
                             <input type="radio" class="btn-check" name="age_group_type" id="age_child" value="child" autocomplete="off">
                             <label class="btn btn-outline-primary py-3" for="age_child">
-                                <i class="bi bi-person-fill fs-4"></i><br>
+                                <span class="fs-4">🧒</span><br>
                                 <strong>Child</strong><br>
                                 <small>2+ years</small>
                             </label>
@@ -35,27 +35,21 @@
                     <div class="mb-4" id="scheduleSection" style="display: none;">
                         <h6><i class="bi bi-calendar-week"></i> Step 2: Select Schedule</h6>
                         <div class="row" id="planCards">
-                            {% for plan in core_plans if plan.is_fixed_plan and plan.is_active %}
+                            <!-- Core Hours (top row) - ordered: 5 days, 3 days, 2 days -->
+                            {% for day_pattern in ['full', 'mwf', 'tth'] %}
+                            {% for plan in core_plans if plan.is_fixed_plan and plan.is_active and plan.schedule_type == 'core' and plan.day_pattern == day_pattern %}
                             <div class="col-md-4 mb-3 plan-card"
                                  data-age-type="{{ plan.age_group_type }}"
                                  data-schedule-type="{{ plan.schedule_type }}"
                                  data-day-pattern="{{ plan.day_pattern }}"
                                  style="display: none;">
                                 <div class="card h-100 plan-selectable" data-plan-id="{{ plan.id }}">
-                                    <div class="card-header text-white
-                                        {% if plan.schedule_type == 'core' %}bg-info{% else %}bg-success{% endif %}">
-                                        <strong>
-                                            {% if plan.schedule_type == 'core' %}Core Hours{% else %}Extended Hours{% endif %}
-                                        </strong>
+                                    <div class="card-header text-white bg-info">
+                                        <strong>Core Hours</strong>
                                     </div>
                                     <div class="card-body text-center">
                                         <p class="mb-2">
-                                            <i class="bi bi-clock"></i>
-                                            {% if plan.schedule_type == 'core' %}
-                                            9:00 AM - 3:00 PM
-                                            {% else %}
-                                            7:30 AM - 5:30 PM
-                                            {% endif %}
+                                            <i class="bi bi-clock"></i> 9:00 AM - 3:00 PM
                                         </p>
                                         <p class="mb-2">
                                             <i class="bi bi-calendar3"></i>
@@ -81,6 +75,49 @@
                                     </div>
                                 </div>
                             </div>
+                            {% endfor %}
+                            {% endfor %}
+                            <!-- Extended Hours (bottom row) - ordered: 5 days, 3 days, 2 days -->
+                            {% for day_pattern in ['full', 'mwf', 'tth'] %}
+                            {% for plan in core_plans if plan.is_fixed_plan and plan.is_active and plan.schedule_type == 'extended' and plan.day_pattern == day_pattern %}
+                            <div class="col-md-4 mb-3 plan-card"
+                                 data-age-type="{{ plan.age_group_type }}"
+                                 data-schedule-type="{{ plan.schedule_type }}"
+                                 data-day-pattern="{{ plan.day_pattern }}"
+                                 style="display: none;">
+                                <div class="card h-100 plan-selectable" data-plan-id="{{ plan.id }}">
+                                    <div class="card-header text-white bg-success">
+                                        <strong>Extended Hours</strong>
+                                    </div>
+                                    <div class="card-body text-center">
+                                        <p class="mb-2">
+                                            <i class="bi bi-clock"></i> 7:30 AM - 5:30 PM
+                                        </p>
+                                        <p class="mb-2">
+                                            <i class="bi bi-calendar3"></i>
+                                            {% if plan.day_pattern == 'full' %}Mon - Fri (5 days)
+                                            {% elif plan.day_pattern == 'mwf' %}Mon, Wed, Fri (3 days)
+                                            {% else %}Tue, Thu (2 days)
+                                            {% endif %}
+                                        </p>
+                                        <h4 class="text-success mb-0">${{ plan.base_price|int }}<small>/month</small></h4>
+                                    </div>
+                                    <div class="card-footer">
+                                        <div class="form-check">
+                                            <input class="form-check-input plan-radio" type="radio"
+                                                   name="selected_plan" value="{{ plan.id }}"
+                                                   data-price="{{ plan.base_price }}"
+                                                   data-days-count="{{ plan.get_days_count() }}"
+                                                   data-age-type="{{ plan.age_group_type }}"
+                                                   id="plan_{{ plan.id }}">
+                                            <label class="form-check-label" for="plan_{{ plan.id }}">
+                                                Select this plan
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
                             {% endfor %}
                         </div>
                     </div>
