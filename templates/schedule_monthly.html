@@ -117,7 +117,7 @@
 
                             {% if schedule_data[day_name]['total_children'] > 0 %}
                             <div class="small">
-                                {% for item in schedule_data[day_name]['enrollments'][:3] %}
+                                {% for item in schedule_data[day_name]['enrollments'][:4] %}
                                 <div class="text-truncate">
                                     {% if item['age_group_type'] == 'infant' and item['schedule_type'] == 'core' %}
                                     <span class="badge text-dark" style="font-size: 0.7rem; background: #ffc107;">
@@ -130,11 +130,11 @@
                                     {% endif %}
                                         {{ item['age_group_name'][:3] }}
                                     </span>
-                                    {{ item['count'] }} {{ item['schedule_name'][:4] }}
+                                    {{ item['count'] }} {{ item['schedule_type']|title }}
                                 </div>
                                 {% endfor %}
-                                {% if schedule_data[day_name]['enrollments']|length > 3 %}
-                                <div class="text-muted">+{{ schedule_data[day_name]['enrollments']|length - 3 }} more</div>
+                                {% if schedule_data[day_name]['enrollments']|length > 4 %}
+                                <div class="text-muted">+{{ schedule_data[day_name]['enrollments']|length - 4 }} more</div>
                                 {% endif %}
                                 <button class="btn btn-sm btn-outline-primary mt-1 w-100"
                                         onclick="viewDayDetails('{{ day_name }}')">

@@ -1573,6 +1573,16 @@ def monthly_schedule():
                     'day_pattern_name': dist['day_pattern_name']
                 })
 
+        # Consolidate enrollments by age_group_type + schedule_type
+        consolidated = {}
+        for item in enrollments:
+            key = (item['age_group_type'], item['schedule_type'])
+            if key in consolidated:
+                consolidated[key]['count'] += item['count']
+            else:
+                consolidated[key] = dict(item)
+        enrollments = list(consolidated.values())
+
         schedule_data[day_name] = {
             'day_name': day_name,
             'total_children': day_attendance['total'],
@@ -1689,6 +1699,17 @@ def daily_schedule(day_name_str):
                 'end_time': end_time,
                 'package_name': f"{dist['schedule_name'][:4]} {dist['day_pattern_name']}"
             })
+
+    # Consolidate by age_group_type + schedule_type
+    consolidated = {}
+    for item in attending:
+        key = (item['age_group_type'], item['schedule_type'])
+        if key in consolidated:
+            consolidated[key]['count'] += item['count']
+        else:
+            consolidated[key] = dict(item)
+            consolidated[key]['package_name'] = item['schedule_type'].title()
+    attending = list(consolidated.values())
 
     # Calculate age group breakdown
     infant_count = day_attendance['infants']
