@@ -119,7 +119,15 @@
                             <div class="small">
                                 {% for item in schedule_data[day_name]['enrollments'][:3] %}
                                 <div class="text-truncate">
-                                    <span class="badge bg-info" style="font-size: 0.7rem;">
+                                    {% if item['age_group_type'] == 'infant' and item['schedule_type'] == 'core' %}
+                                    <span class="badge text-dark" style="font-size: 0.7rem; background: #ffc107;">
+                                    {% elif item['age_group_type'] == 'infant' and item['schedule_type'] == 'extended' %}
+                                    <span class="badge" style="font-size: 0.7rem; background: #dc3545; color: white;">
+                                    {% elif item['age_group_type'] == 'child' and item['schedule_type'] == 'core' %}
+                                    <span class="badge" style="font-size: 0.7rem; background: #0dcaf0; color: white;">
+                                    {% else %}
+                                    <span class="badge" style="font-size: 0.7rem; background: #198754; color: white;">
+                                    {% endif %}
                                         {{ item['age_group_name'][:3] }}
                                     </span>
                                     {{ item['count'] }} {{ item['schedule_name'][:4] }}
@@ -198,12 +206,19 @@ async function viewDayDetails(dateStr) {
             return hours * 60 + minutes;
         }
 
-        // Find earliest and latest times for timeline
+        // Find earliest and latest times for timeline (include both children and staff shifts)
         let earliestTime = 24 * 60;
         let latestTime = 0;
         data.children.forEach(enrollment => {
             const start = timeToMinutes(enrollment.start_time);
             const end = timeToMinutes(enrollment.end_time);
+            earliestTime = Math.min(earliestTime, start);
+            latestTime = Math.max(latestTime, end);
+        });
+        // Also account for staff shift times
+        (data.staff_shifts || []).forEach(shift => {
+            const start = timeToMinutes(shift.start_time);
+            const end = timeToMinutes(shift.end_time);
             earliestTime = Math.min(earliestTime, start);
             latestTime = Math.max(latestTime, end);
         });
@@ -228,15 +243,35 @@ async function viewDayDetails(dateStr) {
         }
         const maxChildren = Math.max(...timePoints.map(p => p.count));
 
+        // Calculate staff coverage at each time point
+        const staffShifts = data.staff_shifts || [];
+        const staffTimePoints = [];
+        for (let time = earliestTime; time <= latestTime; time += 15) {
+            let count = 0;
+            staffShifts.forEach(shift => {
+                const start = timeToMinutes(shift.start_time);
+                const end = timeToMinutes(shift.end_time);
+                if (time >= start && time < end) {
+                    count += shift.count;
+                }
+            });
+            staffTimePoints.push({ time, count });
+        }
+        const maxStaff = Math.max(...staffTimePoints.map(p => p.count), 1);
+
+        // Timeline height: enrollment bars + gap + staff bars + two summary bars
+        const staffSectionTop = data.children.length * 40 + 20;
+        const timelineHeight = staffSectionTop + staffShifts.length * 40 + 190;
+
         let html = `
             <div class="alert alert-info">
                 <strong>Total Children:</strong> ${data.total_children} |
-                <strong>Total Staff Required:</strong> ${data.total_staff_required} |
-                <strong>Peak:</strong> ${maxChildren} children
+                <strong>Staff Positions:</strong> ${data.labor ? data.labor.total_positions : data.total_staff_required} |
+                <strong>Daily Cost:</strong> $${data.labor ? data.labor.daily_cost.toFixed(2) : '—'}
             </div>
 
             <h6 class="border-bottom pb-2">Timeline</h6>
-            <div class="mb-4" style="position: relative; height: ${data.children.length * 40 + 100}px;">
+            <div class="mb-4" style="position: relative; height: ${timelineHeight}px;">
                 <div style="position: absolute; top: 0; left: 60px; right: 0; height: 100%; border-left: 2px solid #dee2e6;">
         `;
 
@@ -253,6 +288,17 @@ async function viewDayDetails(dateStr) {
             `;
         }
 
+        // Color mapping by age group + schedule type
+        function getEnrollmentColor(enrollment) {
+            const isInfant = enrollment.age_group_type === 'infant' || enrollment.age_group === 'Infant';
+            const isExtended = enrollment.schedule_type === 'extended' ||
+                               (enrollment.package_name && enrollment.package_name.startsWith('Exte'));
+            if (isInfant && !isExtended) return '#ffc107';  // Infant Core - yellow
+            if (isInfant && isExtended) return '#dc3545';   // Infant Extended - red
+            if (!isInfant && !isExtended) return '#0dcaf0'; // Child Core - cyan
+            return '#198754';                                // Child Extended - green
+        }
+
         // Add enrollment bars
         data.children.forEach((enrollment, index) => {
             const start = timeToMinutes(enrollment.start_time);
@@ -261,20 +307,49 @@ async function viewDayDetails(dateStr) {
             const widthPercent = ((end - start) / totalMinutes) * 100;
             const top = 10 + (index * 40);
 
-            const colors = ['#0dcaf0', '#198754', '#ffc107', '#dc3545', '#6f42c1'];
-            const color = colors[index % colors.length];
+            const color = getEnrollmentColor(enrollment);
 
+            const textColor = color === '#ffc107' ? '#212529' : 'white';
             html += `
-                <div style="position: absolute; left: ${leftPercent}%; top: ${top}px; width: ${widthPercent}%; height: 30px; background: ${color}; border-radius: 4px; padding: 4px 8px; color: white; font-size: 0.75rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                <div style="position: absolute; left: ${leftPercent}%; top: ${top}px; width: ${widthPercent}%; height: 30px; background: ${color}; border-radius: 4px; padding: 4px 8px; color: ${textColor}; font-size: 0.75rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
                     <strong>${enrollment.count}</strong> ${enrollment.age_group} - ${enrollment.package_name}
                 </div>
             `;
         });
 
-        // Add summary bar showing total children over time at the bottom
-        const summaryTop = 10 + (data.children.length * 40) + 10;
+        // Staff coverage section divider and label
+        const staffLabelTop = staffSectionTop - 5;
+        html += `<div style="position: absolute; left: -60px; top: ${staffLabelTop}px; width: calc(100% + 60px); border-top: 2px dashed #6c757d;"></div>`;
+        html += `<div style="position: absolute; left: -55px; top: ${staffLabelTop + 5}px; font-size: 0.7rem; font-weight: bold; color: #6c757d; text-transform: uppercase;">Staff</div>`;
+
+        // Add staff shift bars
+        staffShifts.forEach((shift, index) => {
+            const start = timeToMinutes(shift.start_time);
+            const end = timeToMinutes(shift.end_time);
+            const leftPercent = ((start - earliestTime) / totalMinutes) * 100;
+            const widthPercent = ((end - start) / totalMinutes) * 100;
+            const top = staffSectionTop + 10 + (index * 40);
+
+            const shiftColors = {
+                'core': '#6f42c1',
+                'extended_am': '#d63384',
+                'extended_pm': '#fd7e14'
+            };
+            const color = shiftColors[shift.shift_type] || '#6c757d';
+
+            html += `
+                <div style="position: absolute; left: ${leftPercent}%; top: ${top}px; width: ${widthPercent}%; height: 30px; background: repeating-linear-gradient(45deg, ${color}, ${color} 10px, ${color}dd 10px, ${color}dd 20px); border-radius: 4px; padding: 4px 8px; color: white; font-size: 0.75rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border: 2px solid ${color};">
+                    <strong>${shift.label}</strong> (${shift.start_time} - ${shift.end_time})
+                </div>
+            `;
+        });
+
+        // Add summary bars at the bottom
+        const summaryTop = staffSectionTop + 10 + (staffShifts.length * 40) + 15;
+
+        // Children summary bar
         html += `<div style="position: absolute; left: 0; top: ${summaryTop}px; width: 100%; height: 50px; border-top: 2px solid #dee2e6; padding-top: 5px;">`;
-        html += `<div style="font-size: 0.75rem; font-weight: bold; color: #6c757d; margin-bottom: 3px;">Total Children</div>`;
+        html += `<div style="font-size: 0.75rem; font-weight: bold; color: #6c757d; margin-bottom: 3px;">Children</div>`;
         for (let i = 0; i < timePoints.length - 1; i++) {
             const leftPercent = ((timePoints[i].time - earliestTime) / totalMinutes) * 100;
             const widthPercent = ((timePoints[i+1].time - timePoints[i].time) / totalMinutes) * 100;
@@ -283,6 +358,23 @@ async function viewDayDetails(dateStr) {
             html += `
                 <div style="position: absolute; left: ${leftPercent}%; bottom: 0; width: ${widthPercent}%; height: ${Math.max(heightPercent * 0.35, 2)}%; background: rgba(13, 110, 253, ${opacity}); border-right: 1px solid rgba(13, 110, 253, 0.3);">
                     ${timePoints[i].count > 0 ? `<span style="position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 0.7rem; font-weight: bold; color: #0d6efd;">${timePoints[i].count}</span>` : ''}
+                </div>
+            `;
+        }
+        html += `</div>`;
+
+        // Staff coverage summary bar
+        const staffSummaryTop = summaryTop + 60;
+        html += `<div style="position: absolute; left: 0; top: ${staffSummaryTop}px; width: 100%; height: 50px; border-top: 2px solid #dee2e6; padding-top: 5px;">`;
+        html += `<div style="font-size: 0.75rem; font-weight: bold; color: #6c757d; margin-bottom: 3px;">Staff Coverage</div>`;
+        for (let i = 0; i < staffTimePoints.length - 1; i++) {
+            const leftPercent = ((staffTimePoints[i].time - earliestTime) / totalMinutes) * 100;
+            const widthPercent = ((staffTimePoints[i+1].time - staffTimePoints[i].time) / totalMinutes) * 100;
+            const heightPercent = maxStaff > 0 ? (staffTimePoints[i].count / maxStaff) * 100 : 0;
+            const opacity = 0.3 + (heightPercent / 100) * 0.5;
+            html += `
+                <div style="position: absolute; left: ${leftPercent}%; bottom: 0; width: ${widthPercent}%; height: ${Math.max(heightPercent * 0.35, 2)}%; background: rgba(111, 66, 193, ${opacity}); border-right: 1px solid rgba(111, 66, 193, 0.3);">
+                    ${staffTimePoints[i].count > 0 ? `<span style="position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 0.7rem; font-weight: bold; color: #6f42c1;">${staffTimePoints[i].count}</span>` : ''}
                 </div>
             `;
         }

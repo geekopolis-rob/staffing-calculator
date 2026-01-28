@@ -1683,6 +1683,8 @@ def daily_schedule(day_name_str):
             attending.append({
                 'count': dist['children'],
                 'age_group': dist['age_group_name'],
+                'age_group_type': dist['age_group_type'],
+                'schedule_type': dist['schedule_type'],
                 'start_time': start_time,
                 'end_time': end_time,
                 'package_name': f"{dist['schedule_name'][:4]} {dist['day_pattern_name']}"
@@ -1712,6 +1714,54 @@ def daily_schedule(day_name_str):
 
     total_staff = sum(ag['required_staff'] for ag in age_group_breakdown)
 
+    # Calculate labor/shift data for staff coverage overlay
+    # Determine core vs extended split for this day
+    core_infants = 0
+    core_children = 0
+    extended_infants = 0
+    extended_children = 0
+    for item in attending:
+        is_infant = item['age_group_type'] == 'infant'
+        is_extended = item['schedule_type'] == 'extended'
+        if is_extended:
+            if is_infant:
+                extended_infants += item['count']
+            else:
+                extended_children += item['count']
+        else:
+            if is_infant:
+                core_infants += item['count']
+            else:
+                core_children += item['count']
+
+    labor = calculate_daily_labor(core_infants, core_children, extended_infants, extended_children)
+
+    # Build staff shift bars for timeline
+    staff_shifts = []
+    if labor['core_staff'] > 0:
+        staff_shifts.append({
+            'label': f"{labor['core_staff']} Core Staff",
+            'count': labor['core_staff'],
+            'start_time': '8:30 AM',
+            'end_time': '3:30 PM',
+            'shift_type': 'core'
+        })
+    if labor['extended_staff'] > 0:
+        staff_shifts.append({
+            'label': f"{labor['extended_staff']} Extended AM Staff",
+            'count': labor['extended_staff'],
+            'start_time': '7:00 AM',
+            'end_time': '1:00 PM',
+            'shift_type': 'extended_am'
+        })
+        staff_shifts.append({
+            'label': f"{labor['extended_staff']} Extended PM Staff",
+            'count': labor['extended_staff'],
+            'start_time': '12:30 PM',
+            'end_time': '6:00 PM',
+            'shift_type': 'extended_pm'
+        })
+
     return jsonify({
         'day_name': day_name_str,
         'total_children': day_attendance['total'],
@@ -1719,7 +1769,9 @@ def daily_schedule(day_name_str):
         'child_count': child_count,
         'children': attending,
         'age_group_breakdown': age_group_breakdown,
-        'total_staff_required': total_staff
+        'total_staff_required': total_staff,
+        'labor': labor,
+        'staff_shifts': staff_shifts
     })
 
 # Capacity Planner Routes
