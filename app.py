@@ -221,7 +221,7 @@ class PackageDiscount(db.Model):
     discount = db.relationship('Discount', backref='package_discounts')
 
 class Enrollment(db.Model):
-    """Bulk enrollment tracking - number of children in a package"""
+    """Bulk enrollment tracking - number of children in a package (DEPRECATED - use CapacitySettings)"""
     id = db.Column(db.Integer, primary_key=True)
     enrollment_package_id = db.Column(db.Integer, db.ForeignKey('enrollment_package.id'), nullable=False)
     age_group_id = db.Column(db.Integer, db.ForeignKey('age_group.id'), nullable=False)
@@ -233,6 +233,49 @@ class Enrollment(db.Model):
     # Relationships
     age_group = db.relationship('AgeGroup', backref='enrollments')
     package = db.relationship('EnrollmentPackage', backref='enrollments')
+
+
+class CapacitySettings(db.Model):
+    """
+    Capacity planner settings - source of truth for enrollment distribution.
+    Stores the ratios that determine how children are distributed across plans.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    total_children = db.Column(db.Integer, nullable=False, default=50)
+
+    # Age mix percentages (must total 100)
+    infant_percent = db.Column(db.Float, nullable=False, default=20.0)
+    child_percent = db.Column(db.Float, nullable=False, default=80.0)
+
+    # Schedule mix percentages (must total 100)
+    core_percent = db.Column(db.Float, nullable=False, default=50.0)
+    extended_percent = db.Column(db.Float, nullable=False, default=50.0)
+
+    # Days mix percentages (must total 100)
+    full_percent = db.Column(db.Float, nullable=False, default=60.0)  # Mon-Fri
+    mwf_percent = db.Column(db.Float, nullable=False, default=30.0)   # Mon/Wed/Fri
+    tth_percent = db.Column(db.Float, nullable=False, default=10.0)   # Tue/Thu
+
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def get_age_mix(self):
+        return {'infant': self.infant_percent, 'child': self.child_percent}
+
+    def get_schedule_mix(self):
+        return {'core': self.core_percent, 'extended': self.extended_percent}
+
+    def get_days_mix(self):
+        return {'full': self.full_percent, 'mwf': self.mwf_percent, 'tth': self.tth_percent}
+
+    @staticmethod
+    def get_or_create():
+        """Get the singleton settings record, creating with defaults if needed"""
+        settings = CapacitySettings.query.first()
+        if not settings:
+            settings = CapacitySettings()
+            db.session.add(settings)
+            db.session.commit()
+        return settings
 
 # Permit levels and their supervision capabilities
 PERMIT_LEVELS = {
@@ -639,6 +682,378 @@ def create_fixed_plans():
     db.session.commit()
     return created_plans
 
+def calculate_capacity_plan(age_mix, schedule_mix, days_mix, total_children):
+    """
+    Calculate capacity planning simulation based on enrollment ratios.
+
+    Args:
+        age_mix: dict with 'infant' and 'child' percentages (must total 100)
+        schedule_mix: dict with 'core' and 'extended' percentages (must total 100)
+        days_mix: dict with 'full', 'mwf', 'tth' percentages (must total 100)
+        total_children: int total number of children to distribute
+
+    Returns:
+        dict with enrollment distribution and staff requirements
+    """
+    import math
+
+    # Convert percentages to decimals
+    age_ratios = {k: v / 100 for k, v in age_mix.items()}
+    schedule_ratios = {k: v / 100 for k, v in schedule_mix.items()}
+    days_ratios = {k: v / 100 for k, v in days_mix.items()}
+
+    # Calculate distribution across all 12 plan combinations
+    distribution = []
+    running_total = 0
+    plan_combinations = []
+
+    for schedule_type in ['core', 'extended']:
+        for day_pattern in ['full', 'mwf', 'tth']:
+            for age_group_type in ['infant', 'child']:
+                plan_combinations.append({
+                    'schedule_type': schedule_type,
+                    'day_pattern': day_pattern,
+                    'age_group_type': age_group_type
+                })
+
+    # Calculate raw distribution (may have fractional children)
+    raw_distribution = []
+    for combo in plan_combinations:
+        raw_count = (
+            total_children *
+            age_ratios.get(combo['age_group_type'], 0) *
+            schedule_ratios.get(combo['schedule_type'], 0) *
+            days_ratios.get(combo['day_pattern'], 0)
+        )
+        raw_distribution.append({
+            **combo,
+            'raw_count': raw_count,
+            'count': int(raw_count)  # Floor for now
+        })
+
+    # Adjust to match total (distribute remainders)
+    current_total = sum(d['count'] for d in raw_distribution)
+    remainder = total_children - current_total
+
+    # Sort by fractional part descending to distribute remainders fairly
+    sorted_by_fraction = sorted(
+        enumerate(raw_distribution),
+        key=lambda x: x[1]['raw_count'] - int(x[1]['raw_count']),
+        reverse=True
+    )
+
+    for i in range(remainder):
+        idx = sorted_by_fraction[i % len(sorted_by_fraction)][0]
+        raw_distribution[idx]['count'] += 1
+
+    # Build final distribution with display names
+    for combo in raw_distribution:
+        schedule = SCHEDULE_TYPES[combo['schedule_type']]
+        pattern = DAY_PATTERNS[combo['day_pattern']]
+        age = AGE_GROUP_TYPES[combo['age_group_type']]
+
+        distribution.append({
+            'schedule_type': combo['schedule_type'],
+            'schedule_name': schedule['name'],
+            'day_pattern': combo['day_pattern'],
+            'day_pattern_name': pattern['name'],
+            'days_count': pattern['count'],
+            'age_group_type': combo['age_group_type'],
+            'age_group_name': age['name'],
+            'children': combo['count'],
+            'plan_name': f"{age['name']} {pattern['name']} {schedule['name']}"
+        })
+
+    # Calculate peak day attendance
+    # Monday: Full-time + 3-day (MWF) children
+    # Tuesday: Full-time + 2-day (TTh) children
+    # Wednesday: Full-time + 3-day (MWF) children
+    # Thursday: Full-time + 2-day (TTh) children
+    # Friday: Full-time + 3-day (MWF) children
+
+    def get_children_by_day_pattern(pattern, age_type=None):
+        return sum(
+            d['children'] for d in distribution
+            if d['day_pattern'] == pattern and
+               (age_type is None or d['age_group_type'] == age_type)
+        )
+
+    full_infants = get_children_by_day_pattern('full', 'infant')
+    mwf_infants = get_children_by_day_pattern('mwf', 'infant')
+    tth_infants = get_children_by_day_pattern('tth', 'infant')
+
+    full_children = get_children_by_day_pattern('full', 'child')
+    mwf_children = get_children_by_day_pattern('mwf', 'child')
+    tth_children = get_children_by_day_pattern('tth', 'child')
+
+    daily_attendance = {
+        'Monday': {
+            'infants': full_infants + mwf_infants,
+            'children': full_children + mwf_children
+        },
+        'Tuesday': {
+            'infants': full_infants + tth_infants,
+            'children': full_children + tth_children
+        },
+        'Wednesday': {
+            'infants': full_infants + mwf_infants,
+            'children': full_children + mwf_children
+        },
+        'Thursday': {
+            'infants': full_infants + tth_infants,
+            'children': full_children + tth_children
+        },
+        'Friday': {
+            'infants': full_infants + mwf_infants,
+            'children': full_children + mwf_children
+        }
+    }
+
+    # Add totals to each day
+    for day, counts in daily_attendance.items():
+        counts['total'] = counts['infants'] + counts['children']
+
+    # Find peak day
+    peak_day = max(daily_attendance.items(), key=lambda x: x[1]['total'])
+    peak_day_name = peak_day[0]
+    peak_attendance = peak_day[1]
+
+    # Calculate staff requirements based on peak day
+    # Infants: 1:4 ratio
+    # Children: 1:12 ratio (basic)
+    infant_ratio = 4  # 1 teacher per 4 infants
+    child_ratio = 12  # 1 teacher per 12 children (basic)
+
+    infant_teachers_needed = math.ceil(peak_attendance['infants'] / infant_ratio) if peak_attendance['infants'] > 0 else 0
+    child_teachers_needed = math.ceil(peak_attendance['children'] / child_ratio) if peak_attendance['children'] > 0 else 0
+
+    staff_requirements = {
+        'peak_day': peak_day_name,
+        'peak_infants': peak_attendance['infants'],
+        'peak_children': peak_attendance['children'],
+        'peak_total': peak_attendance['total'],
+        'infant_staff': {
+            'count': infant_teachers_needed,
+            'ratio': f"1:{infant_ratio}",
+            'note': 'Must have infant specialization (3+ units infant care)'
+        },
+        'child_staff': {
+            'count': child_teachers_needed,
+            'ratio': f"1:{child_ratio}",
+            'note': 'Basic ratio. Enhanced ratios available with aides.'
+        },
+        'total_teachers_needed': infant_teachers_needed + child_teachers_needed,
+        'enhanced_options': []
+    }
+
+    # Calculate enhanced ratio options for children
+    if peak_attendance['children'] > 0:
+        # 1:15 with 1 teacher + 1 aide
+        staff_at_15 = math.ceil(peak_attendance['children'] / 15)
+        # 1:18 with 1 teacher + 1 aide (6+ ECE units)
+        staff_at_18 = math.ceil(peak_attendance['children'] / 18)
+
+        staff_requirements['enhanced_options'] = [
+            {
+                'ratio': '1:15',
+                'description': '1 teacher + 1 aide per group',
+                'teachers_needed': staff_at_15,
+                'aides_needed': staff_at_15,
+                'total_staff': staff_at_15 * 2
+            },
+            {
+                'ratio': '1:18',
+                'description': '1 teacher + 1 aide (6+ ECE units) per group',
+                'teachers_needed': staff_at_18,
+                'aides_needed': staff_at_18,
+                'aide_requirements': '6+ ECE units',
+                'total_staff': staff_at_18 * 2
+            }
+        ]
+
+    # Summary by schedule type (core vs extended)
+    schedule_summary = {
+        'core': {
+            'infants': sum(d['children'] for d in distribution if d['schedule_type'] == 'core' and d['age_group_type'] == 'infant'),
+            'children': sum(d['children'] for d in distribution if d['schedule_type'] == 'core' and d['age_group_type'] == 'child')
+        },
+        'extended': {
+            'infants': sum(d['children'] for d in distribution if d['schedule_type'] == 'extended' and d['age_group_type'] == 'infant'),
+            'children': sum(d['children'] for d in distribution if d['schedule_type'] == 'extended' and d['age_group_type'] == 'child')
+        }
+    }
+
+    for sched in schedule_summary.values():
+        sched['total'] = sched['infants'] + sched['children']
+
+    # Labor cost calculations
+    # Query available staff for rate information
+    available_staff = StaffMember.query.filter_by(is_available=True).all()
+
+    # Calculate average rates by role
+    teachers = [s for s in available_staff if PERMIT_LEVELS.get(s.permit_level, {}).get('rank', 0) >= 3]
+    aides = [s for s in available_staff if PERMIT_LEVELS.get(s.permit_level, {}).get('rank', 0) < 3]
+
+    avg_teacher_rate = sum(s.hourly_rate for s in teachers) / len(teachers) if teachers else 25.00
+    avg_aide_rate = sum(s.hourly_rate for s in aides) / len(aides) if aides else 18.00
+
+    # Shift hours with 30-min buffer before and after
+    CORE_SHIFT_HOURS = 7.0  # 8:30am-3:30pm (6hr program + 1hr buffer)
+    EXTENDED_AM_HOURS = 6.0  # 7:00am-1:00pm
+    EXTENDED_PM_HOURS = 5.5  # 12:30pm-6:00pm
+
+    # Calculate staff needed for each schedule type based on distribution
+    core_infants = schedule_summary['core']['infants']
+    core_children = schedule_summary['core']['children']
+    extended_infants = schedule_summary['extended']['infants']
+    extended_children = schedule_summary['extended']['children']
+
+    # Staff needed for core (single shift)
+    core_infant_staff = math.ceil(core_infants / 4) if core_infants > 0 else 0
+    core_child_staff = math.ceil(core_children / 12) if core_children > 0 else 0
+
+    # Staff needed for extended (2 shifts to avoid overtime)
+    extended_infant_staff = math.ceil(extended_infants / 4) if extended_infants > 0 else 0
+    extended_child_staff = math.ceil(extended_children / 12) if extended_children > 0 else 0
+
+    # Positions needed (extended needs AM + PM coverage)
+    core_positions = core_infant_staff + core_child_staff
+    extended_positions_per_shift = extended_infant_staff + extended_child_staff
+    extended_total_positions = extended_positions_per_shift * 2  # AM + PM shifts
+
+    total_positions = core_positions + extended_total_positions
+
+    # Daily labor hours
+    core_daily_hours = core_positions * CORE_SHIFT_HOURS
+    extended_daily_hours = (extended_positions_per_shift * EXTENDED_AM_HOURS +
+                           extended_positions_per_shift * EXTENDED_PM_HOURS)
+    total_daily_hours = core_daily_hours + extended_daily_hours
+
+    # Daily labor cost (using average teacher rate for simplicity)
+    avg_rate = avg_teacher_rate  # Use teacher rate as baseline
+    daily_labor_cost = total_daily_hours * avg_rate
+
+    # Weekly (5 days) and monthly (4.33 weeks) costs
+    weekly_labor_cost = daily_labor_cost * 5
+    monthly_labor_cost = weekly_labor_cost * 4.33
+
+    # Cost per child
+    cost_per_child_monthly = monthly_labor_cost / total_children if total_children > 0 else 0
+
+    labor_costs = {
+        'available_staff': {
+            'total': len(available_staff),
+            'teachers': len(teachers),
+            'aides': len(aides),
+            'avg_teacher_rate': round(avg_teacher_rate, 2),
+            'avg_aide_rate': round(avg_aide_rate, 2)
+        },
+        'shifts': {
+            'core': {
+                'hours': CORE_SHIFT_HOURS,
+                'schedule': '8:30am - 3:30pm',
+                'staff_needed': core_positions,
+                'note': 'Single shift (under 8hr OT threshold)'
+            },
+            'extended_am': {
+                'hours': EXTENDED_AM_HOURS,
+                'schedule': '7:00am - 1:00pm',
+                'staff_needed': extended_positions_per_shift,
+                'note': 'Morning shift'
+            },
+            'extended_pm': {
+                'hours': EXTENDED_PM_HOURS,
+                'schedule': '12:30pm - 6:00pm',
+                'staff_needed': extended_positions_per_shift,
+                'note': 'Afternoon shift (30-min overlap for handoff)'
+            }
+        },
+        'positions': {
+            'core_total': core_positions,
+            'extended_total': extended_total_positions,
+            'grand_total': total_positions
+        },
+        'hours': {
+            'daily': round(total_daily_hours, 1),
+            'weekly': round(total_daily_hours * 5, 1)
+        },
+        'costs': {
+            'daily': round(daily_labor_cost, 2),
+            'weekly': round(weekly_labor_cost, 2),
+            'monthly': round(monthly_labor_cost, 2),
+            'cost_per_child_monthly': round(cost_per_child_monthly, 2)
+        }
+    }
+
+    return {
+        'inputs': {
+            'total_children': total_children,
+            'age_mix': age_mix,
+            'schedule_mix': schedule_mix,
+            'days_mix': days_mix
+        },
+        'distribution': distribution,
+        'daily_attendance': daily_attendance,
+        'schedule_summary': schedule_summary,
+        'staff_requirements': staff_requirements,
+        'labor_costs': labor_costs
+    }
+
+def calculate_daily_labor(core_infants, core_children, extended_infants, extended_children):
+    """
+    Calculate labor requirements for a single day based on actual enrollment counts.
+
+    Args:
+        core_infants: Number of infants in core hours programs
+        core_children: Number of children (2+) in core hours programs
+        extended_infants: Number of infants in extended hours programs
+        extended_children: Number of children (2+) in extended hours programs
+
+    Returns:
+        dict with staff positions, hours, and costs
+    """
+    import math
+
+    # Shift hours with 30-min buffer before and after
+    CORE_SHIFT_HOURS = 7.0  # 8:30am-3:30pm (single shift, under 8hr OT)
+    EXTENDED_AM_HOURS = 6.0  # 7:00am-1:00pm
+    EXTENDED_PM_HOURS = 5.5  # 12:30pm-6:00pm
+
+    # Staff needed based on ratios (infants 1:4, children 1:12)
+    core_infant_staff = math.ceil(core_infants / 4) if core_infants > 0 else 0
+    core_child_staff = math.ceil(core_children / 12) if core_children > 0 else 0
+    extended_infant_staff = math.ceil(extended_infants / 4) if extended_infants > 0 else 0
+    extended_child_staff = math.ceil(extended_children / 12) if extended_children > 0 else 0
+
+    # Positions needed
+    core_positions = core_infant_staff + core_child_staff
+    extended_positions = extended_infant_staff + extended_child_staff
+
+    # Hours calculation
+    core_hours = core_positions * CORE_SHIFT_HOURS
+    extended_am_hours = extended_positions * EXTENDED_AM_HOURS
+    extended_pm_hours = extended_positions * EXTENDED_PM_HOURS
+    total_hours = core_hours + extended_am_hours + extended_pm_hours
+
+    # Get average rate from available staff
+    available_staff = StaffMember.query.filter_by(is_available=True).all()
+    teachers = [s for s in available_staff if PERMIT_LEVELS.get(s.permit_level, {}).get('rank', 0) >= 3]
+    avg_rate = sum(s.hourly_rate for s in teachers) / len(teachers) if teachers else 25.00
+
+    daily_cost = total_hours * avg_rate
+
+    return {
+        'core_staff': core_positions,
+        'core_hours': core_hours,
+        'extended_staff': extended_positions,
+        'extended_am_hours': extended_am_hours,
+        'extended_pm_hours': extended_pm_hours,
+        'total_positions': core_positions + (extended_positions * 2),  # Extended needs AM + PM
+        'total_hours': round(total_hours, 1),
+        'daily_cost': round(daily_cost, 2),
+        'avg_rate': round(avg_rate, 2)
+    }
+
 # Routes
 @app.route('/')
 def index():
@@ -1044,10 +1459,8 @@ def toggle_package(id):
 # Enrollment Routes
 @app.route('/enrollment')
 def manage_enrollment():
-    enrollments = Enrollment.query.all()
-    packages = EnrollmentPackage.query.filter_by(is_active=True).all()
-    age_groups = AgeGroup.query.all()
-    return render_template('enrollment.html', enrollments=enrollments, packages=packages, age_groups=age_groups)
+    """Redirect to capacity planner - enrollment is now managed via capacity settings"""
+    return redirect(url_for('capacity_planner'))
 
 @app.route('/enrollment/add', methods=['POST'])
 def add_enrollment():
@@ -1091,42 +1504,104 @@ def edit_enrollment(id):
 # Schedule Routes
 @app.route('/schedule')
 def monthly_schedule():
-    """View typical monthly schedule pattern"""
+    """View typical monthly schedule pattern - uses capacity settings as source of truth"""
 
-    # Create a simple 4-week calendar with just day-of-week patterns
-    # Each "day" is just labeled Mon, Tue, Wed, Thu, Fri
+    # Get capacity settings (source of truth for enrollment)
+    settings = CapacitySettings.get_or_create()
+
+    # Calculate the distribution from capacity settings
+    capacity_data = calculate_capacity_plan(
+        settings.get_age_mix(),
+        settings.get_schedule_mix(),
+        settings.get_days_mix(),
+        settings.total_children
+    )
+
     days_of_week = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 
-    # Get all active enrollments
-    enrollments = Enrollment.query.filter_by(status='active').all()
-
-    # Build schedule data for each day of the week
+    # Build schedule data from capacity plan
     schedule_data = {}
     for day_name in days_of_week:
-        day_attr = day_name.lower()
-        total_children = 0
-        attending_enrollments = []
+        day_attendance = capacity_data['daily_attendance'].get(day_name, {'infants': 0, 'children': 0, 'total': 0})
 
-        for enrollment in enrollments:
-            # Check if package includes this day of the week
-            core_plan = enrollment.package.core_plan
+        # For this day, get breakdown by schedule type
+        # Use the schedule_summary to determine core vs extended split
+        schedule_summary = capacity_data['schedule_summary']
+        total_day = day_attendance['total']
 
-            if hasattr(core_plan, day_attr) and getattr(core_plan, day_attr):
-                total_children += enrollment.child_count
-                attending_enrollments.append({
-                    'enrollment': enrollment,
-                    'count': enrollment.child_count,
-                    'core_start': core_plan.start_time,
-                    'core_end': core_plan.end_time,
-                    'extended_start': enrollment.package.extended_care_start_time,
-                    'extended_end': enrollment.package.extended_care_end_time
+        if total_day > 0:
+            # Approximate core vs extended ratio from schedule_summary
+            total_enrolled = schedule_summary['core']['total'] + schedule_summary['extended']['total']
+            if total_enrolled > 0:
+                core_ratio = schedule_summary['core']['total'] / total_enrolled
+                extended_ratio = schedule_summary['extended']['total'] / total_enrolled
+            else:
+                core_ratio = 0.5
+                extended_ratio = 0.5
+
+            core_infants = int(day_attendance['infants'] * core_ratio)
+            extended_infants = day_attendance['infants'] - core_infants
+            core_children = int(day_attendance['children'] * core_ratio)
+            extended_children = day_attendance['children'] - core_children
+        else:
+            core_infants = core_children = extended_infants = extended_children = 0
+
+        # Calculate labor for this day
+        labor = calculate_daily_labor(core_infants, core_children, extended_infants, extended_children)
+
+        # Build enrollment-like items from distribution for display
+        enrollments = []
+        for dist in capacity_data['distribution']:
+            # Check if this plan applies to this day
+            day_pattern = dist['day_pattern']
+            applies_to_day = False
+            if day_pattern == 'full':
+                applies_to_day = True
+            elif day_pattern == 'mwf' and day_name in ['Monday', 'Wednesday', 'Friday']:
+                applies_to_day = True
+            elif day_pattern == 'tth' and day_name in ['Tuesday', 'Thursday']:
+                applies_to_day = True
+
+            if applies_to_day and dist['children'] > 0:
+                enrollments.append({
+                    'plan_name': dist['plan_name'],
+                    'count': dist['children'],
+                    'age_group_type': dist['age_group_type'],
+                    'age_group_name': dist['age_group_name'],
+                    'schedule_type': dist['schedule_type'],
+                    'schedule_name': dist['schedule_name'],
+                    'day_pattern_name': dist['day_pattern_name']
                 })
 
         schedule_data[day_name] = {
             'day_name': day_name,
-            'total_children': total_children,
-            'enrollments': attending_enrollments
+            'total_children': day_attendance['total'],
+            'infants': day_attendance['infants'],
+            'children': day_attendance['children'],
+            'enrollments': enrollments,
+            'labor': labor
         }
+
+    # Calculate weekly labor summary (use peak day for positions, sum for costs)
+    peak_day = max(schedule_data.values(), key=lambda x: x['total_children'])
+    peak_labor = peak_day['labor']
+
+    # Sum daily costs across all 5 days
+    total_weekly_cost = sum(d['labor']['daily_cost'] for d in schedule_data.values())
+
+    weekly_labor = {
+        'core_staff': peak_labor['core_staff'],
+        'core_hours': peak_labor['core_hours'],
+        'extended_staff': peak_labor['extended_staff'],
+        'extended_am_hours': peak_labor['extended_am_hours'],
+        'extended_pm_hours': peak_labor['extended_pm_hours'],
+        'total_positions': peak_labor['total_positions'],
+        'total_hours': peak_labor['total_hours'],
+        'daily_cost': peak_labor['daily_cost'],
+        'weekly_cost': round(total_weekly_cost, 2),
+        'monthly_cost': round(total_weekly_cost * 4.33, 2),
+        'avg_rate': peak_labor['avg_rate']
+    }
 
     # Create a simple 4-week calendar structure for display
     calendar = []
@@ -1137,6 +1612,9 @@ def monthly_schedule():
                          month_name="Typical Month",
                          calendar=calendar,
                          schedule_data=schedule_data,
+                         weekly_labor=weekly_labor,
+                         capacity_data=capacity_data,
+                         settings=settings,
                          age_groups=AgeGroup.query.all())
 
 def format_time_12hr(time_str):
@@ -1160,67 +1638,178 @@ def format_time_12hr(time_str):
 
 @app.route('/schedule/daily/<day_name_str>')
 def daily_schedule(day_name_str):
-    """View detailed schedule for a specific day of the week"""
-    import json
+    """View detailed schedule for a specific day - uses capacity settings as source of truth"""
+    import math
 
     # Validate day name
     valid_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     if day_name_str not in valid_days:
         return jsonify({'error': 'Invalid day name'}), 400
 
-    # Get all active enrollments attending this day
-    enrollments = Enrollment.query.filter_by(status='active').all()
+    # Get capacity settings (source of truth)
+    settings = CapacitySettings.get_or_create()
+    capacity_data = calculate_capacity_plan(
+        settings.get_age_mix(),
+        settings.get_schedule_mix(),
+        settings.get_days_mix(),
+        settings.total_children
+    )
+
+    # Get attendance for this day
+    day_attendance = capacity_data['daily_attendance'].get(day_name_str, {'infants': 0, 'children': 0, 'total': 0})
+
+    # Build list of enrollments for this day from distribution
     attending = []
+    for dist in capacity_data['distribution']:
+        # Check if this plan applies to this day
+        day_pattern = dist['day_pattern']
+        applies_to_day = False
+        if day_pattern == 'full':
+            applies_to_day = True
+        elif day_pattern == 'mwf' and day_name_str in ['Monday', 'Wednesday', 'Friday']:
+            applies_to_day = True
+        elif day_pattern == 'tth' and day_name_str in ['Tuesday', 'Thursday']:
+            applies_to_day = True
 
-    for enrollment in enrollments:
-        core_plan = enrollment.package.core_plan
-        day_attr = day_name_str.lower()
-
-        if hasattr(core_plan, day_attr) and getattr(core_plan, day_attr):
-            # Determine actual start/end times
-            start_time = enrollment.package.extended_care_start_time or core_plan.start_time
-            end_time = enrollment.package.extended_care_end_time or core_plan.end_time
+        if applies_to_day and dist['children'] > 0:
+            # Get times based on schedule type
+            if dist['schedule_type'] == 'extended':
+                start_time = '7:30 AM'
+                end_time = '5:30 PM'
+            else:
+                start_time = '9:00 AM'
+                end_time = '3:00 PM'
 
             attending.append({
-                'id': enrollment.id,
-                'count': enrollment.child_count,
-                'age_group': enrollment.age_group.name,
-                'age_group_id': enrollment.age_group_id,
-                'start_time': format_time_12hr(start_time),
-                'end_time': format_time_12hr(end_time),
-                'core_start': core_plan.start_time,
-                'core_end': core_plan.end_time,
-                'package_name': enrollment.package.short_code or enrollment.package.name
+                'count': dist['children'],
+                'age_group': dist['age_group_name'],
+                'start_time': start_time,
+                'end_time': end_time,
+                'package_name': f"{dist['schedule_name'][:4]} {dist['day_pattern_name']}"
             })
 
-    # Calculate required staffing by age group and time slot
-    age_group_counts = {}
-    for item in attending:
-        ag_id = item['age_group_id']
-        if ag_id not in age_group_counts:
-            age_group = AgeGroup.query.get(ag_id)
-            age_group_counts[ag_id] = {
-                'name': age_group.name,
-                'ratio': age_group.required_ratio,
-                'count': 0,
-                'required_staff': 0
-            }
-        age_group_counts[ag_id]['count'] += item['count']
+    # Calculate age group breakdown
+    infant_count = day_attendance['infants']
+    child_count = day_attendance['children']
 
-    # Calculate required staff for each age group
-    for ag_id, data in age_group_counts.items():
-        age_group = AgeGroup.query.get(ag_id)
-        staff, children_per_staff = age_group.get_ratio_parts()
-        required = (data['count'] + children_per_staff - 1) // children_per_staff * staff
-        age_group_counts[ag_id]['required_staff'] = required
+    age_group_breakdown = []
+    if infant_count > 0:
+        infant_staff = math.ceil(infant_count / 4)
+        age_group_breakdown.append({
+            'name': 'Infants (0-18 months)',
+            'ratio': '1:4',
+            'count': infant_count,
+            'required_staff': infant_staff
+        })
+    if child_count > 0:
+        child_staff = math.ceil(child_count / 12)
+        age_group_breakdown.append({
+            'name': 'Child (2-6 years)',
+            'ratio': '1:12',
+            'count': child_count,
+            'required_staff': child_staff
+        })
+
+    total_staff = sum(ag['required_staff'] for ag in age_group_breakdown)
 
     return jsonify({
         'day_name': day_name_str,
-        'total_children': sum(item['count'] for item in attending),
+        'total_children': day_attendance['total'],
+        'infant_count': infant_count,
+        'child_count': child_count,
         'children': attending,
-        'age_group_breakdown': list(age_group_counts.values()),
-        'total_staff_required': sum(ag['required_staff'] for ag in age_group_counts.values())
+        'age_group_breakdown': age_group_breakdown,
+        'total_staff_required': total_staff
     })
+
+# Capacity Planner Routes
+@app.route('/capacity-planner')
+def capacity_planner():
+    """Capacity planning - source of truth for enrollment distribution"""
+    settings = CapacitySettings.get_or_create()
+    return render_template('capacity_planner.html',
+                         schedule_types=SCHEDULE_TYPES,
+                         day_patterns=DAY_PATTERNS,
+                         age_group_types=AGE_GROUP_TYPES,
+                         settings=settings)
+
+@app.route('/capacity-planner/settings', methods=['GET'])
+def get_capacity_settings():
+    """Get current capacity settings"""
+    settings = CapacitySettings.get_or_create()
+    return jsonify({
+        'total_children': settings.total_children,
+        'age_mix': settings.get_age_mix(),
+        'schedule_mix': settings.get_schedule_mix(),
+        'days_mix': settings.get_days_mix()
+    })
+
+@app.route('/capacity-planner/settings', methods=['POST'])
+def save_capacity_settings():
+    """Save capacity settings - this updates the source of truth for enrollment"""
+    data = request.json
+
+    age_mix = data.get('age_mix', {'infant': 20, 'child': 80})
+    schedule_mix = data.get('schedule_mix', {'core': 50, 'extended': 50})
+    days_mix = data.get('days_mix', {'full': 60, 'mwf': 30, 'tth': 10})
+    total_children = data.get('total_children', 50)
+
+    # Validate that each mix totals 100
+    if abs(sum(age_mix.values()) - 100) > 0.01:
+        return jsonify({'error': 'Age mix must total 100%'}), 400
+    if abs(sum(schedule_mix.values()) - 100) > 0.01:
+        return jsonify({'error': 'Schedule mix must total 100%'}), 400
+    if abs(sum(days_mix.values()) - 100) > 0.01:
+        return jsonify({'error': 'Days mix must total 100%'}), 400
+
+    # Update settings
+    settings = CapacitySettings.get_or_create()
+    settings.total_children = total_children
+    settings.infant_percent = age_mix.get('infant', 20)
+    settings.child_percent = age_mix.get('child', 80)
+    settings.core_percent = schedule_mix.get('core', 50)
+    settings.extended_percent = schedule_mix.get('extended', 50)
+    settings.full_percent = days_mix.get('full', 60)
+    settings.mwf_percent = days_mix.get('mwf', 30)
+    settings.tth_percent = days_mix.get('tth', 10)
+
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': 'Settings saved'})
+
+@app.route('/capacity-planner/calculate', methods=['POST'])
+def calculate_capacity():
+    """Calculate capacity plan from ratios and optionally save"""
+    data = request.json
+
+    # Validate inputs
+    age_mix = data.get('age_mix', {'infant': 20, 'child': 80})
+    schedule_mix = data.get('schedule_mix', {'core': 50, 'extended': 50})
+    days_mix = data.get('days_mix', {'full': 60, 'mwf': 30, 'tth': 10})
+    total_children = data.get('total_children', 50)
+
+    # Validate that each mix totals 100
+    if abs(sum(age_mix.values()) - 100) > 0.01:
+        return jsonify({'error': 'Age mix must total 100%'}), 400
+    if abs(sum(schedule_mix.values()) - 100) > 0.01:
+        return jsonify({'error': 'Schedule mix must total 100%'}), 400
+    if abs(sum(days_mix.values()) - 100) > 0.01:
+        return jsonify({'error': 'Days mix must total 100%'}), 400
+
+    # Auto-save settings when calculating
+    settings = CapacitySettings.get_or_create()
+    settings.total_children = total_children
+    settings.infant_percent = age_mix.get('infant', 20)
+    settings.child_percent = age_mix.get('child', 80)
+    settings.core_percent = schedule_mix.get('core', 50)
+    settings.extended_percent = schedule_mix.get('extended', 50)
+    settings.full_percent = days_mix.get('full', 60)
+    settings.mwf_percent = days_mix.get('mwf', 30)
+    settings.tth_percent = days_mix.get('tth', 10)
+    db.session.commit()
+
+    results = calculate_capacity_plan(age_mix, schedule_mix, days_mix, total_children)
+    return jsonify(results)
 
 @app.route('/initialize-db')
 def initialize_db():
@@ -1332,6 +1921,29 @@ def initialize_db():
             is_active=True
         )
         db.session.add(sibling_discount)
+        db.session.commit()
+
+    # Add placeholder staff if none exist
+    if StaffMember.query.count() == 0:
+        placeholder_staff = [
+            # Teachers (can work alone, $28-35/hr)
+            StaffMember(name='Teacher 1', permit_level='Teacher', hourly_rate=30.00,
+                        ece_units=24, has_infant_specialization=True, is_fully_qualified=True),
+            StaffMember(name='Teacher 2', permit_level='Teacher', hourly_rate=28.00,
+                        ece_units=18, has_infant_specialization=False, is_fully_qualified=True),
+            # Associate Teachers ($22-26/hr)
+            StaffMember(name='Associate 1', permit_level='Associate Teacher', hourly_rate=24.00,
+                        ece_units=12, has_infant_specialization=True, is_fully_qualified=True),
+            StaffMember(name='Associate 2', permit_level='Associate Teacher', hourly_rate=22.00,
+                        ece_units=12, has_infant_specialization=False, is_fully_qualified=True),
+            # Assistants (need supervision, $18-20/hr)
+            StaffMember(name='Assistant 1', permit_level='Assistant', hourly_rate=20.00,
+                        ece_units=6, has_infant_specialization=False, is_fully_qualified=False),
+            StaffMember(name='Assistant 2', permit_level='Assistant', hourly_rate=18.00,
+                        ece_units=0, has_infant_specialization=False, is_fully_qualified=False),
+        ]
+        for staff in placeholder_staff:
+            db.session.add(staff)
         db.session.commit()
 
     return f"Database initialized. Created {len(created_plans)} fixed plans."

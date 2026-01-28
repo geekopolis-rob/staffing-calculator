@@ -10,6 +10,86 @@
     </div>
 </div>
 
+<!-- Weekly Labor Summary -->
+<div class="card mb-4">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="bi bi-currency-dollar"></i> Weekly Labor Summary</h5>
+    </div>
+    <div class="card-body">
+        <div class="row text-center mb-3">
+            <div class="col">
+                <div class="border rounded p-2">
+                    <h4 class="text-primary mb-0">{{ weekly_labor.total_positions }}</h4>
+                    <small class="text-muted">Positions/Day</small>
+                </div>
+            </div>
+            <div class="col">
+                <div class="border rounded p-2">
+                    <h4 class="text-success mb-0">${{ "%.2f"|format(weekly_labor.daily_cost) }}</h4>
+                    <small class="text-muted">Daily Cost</small>
+                </div>
+            </div>
+            <div class="col">
+                <div class="border rounded p-2">
+                    <h4 class="text-success mb-0">${{ "%.2f"|format(weekly_labor.weekly_cost) }}</h4>
+                    <small class="text-muted">Weekly Cost</small>
+                </div>
+            </div>
+            <div class="col">
+                <div class="border rounded p-2">
+                    <h4 class="text-info mb-0">${{ "%.2f"|format(weekly_labor.monthly_cost) }}</h4>
+                    <small class="text-muted">Monthly Cost</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Shift Breakdown -->
+        <h6 class="mb-2">Shift Breakdown (Peak Day Staffing)</h6>
+        <table class="table table-sm mb-0">
+            <thead>
+                <tr>
+                    <th>Shift</th>
+                    <th>Schedule</th>
+                    <th class="text-center">Staff</th>
+                    <th class="text-center">Hours</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if weekly_labor.core_staff > 0 %}
+                <tr>
+                    <td>Core Hours</td>
+                    <td><small>8:30am - 3:30pm</small></td>
+                    <td class="text-center">{{ weekly_labor.core_staff }}</td>
+                    <td class="text-center">{{ weekly_labor.core_hours }}</td>
+                </tr>
+                {% endif %}
+                {% if weekly_labor.extended_staff > 0 %}
+                <tr>
+                    <td>Extended AM</td>
+                    <td><small>7:00am - 1:00pm</small></td>
+                    <td class="text-center">{{ weekly_labor.extended_staff }}</td>
+                    <td class="text-center">{{ weekly_labor.extended_am_hours }}</td>
+                </tr>
+                <tr>
+                    <td>Extended PM</td>
+                    <td><small>12:30pm - 6:00pm</small></td>
+                    <td class="text-center">{{ weekly_labor.extended_staff }}</td>
+                    <td class="text-center">{{ weekly_labor.extended_pm_hours }}</td>
+                </tr>
+                {% endif %}
+            </tbody>
+            <tfoot>
+                <tr class="table-light">
+                    <td colspan="2"><strong>Total</strong></td>
+                    <td class="text-center"><strong>{{ weekly_labor.total_positions }}</strong></td>
+                    <td class="text-center"><strong>{{ weekly_labor.total_hours }} hrs</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+        <small class="text-muted">Avg hourly rate: ${{ weekly_labor.avg_rate }}/hr | Extended hours split into 2 shifts to avoid overtime</small>
+    </div>
+</div>
+
 <div class="card">
     <div class="card-body">
         <div class="table-responsive">
@@ -40,9 +120,9 @@
                                 {% for item in schedule_data[day_name]['enrollments'][:3] %}
                                 <div class="text-truncate">
                                     <span class="badge bg-info" style="font-size: 0.7rem;">
-                                        {{ item['enrollment'].age_group.name[:3] }}
+                                        {{ item['age_group_name'][:3] }}
                                     </span>
-                                    {{ item['count'] }} in {{ item['enrollment'].package.short_code or item['enrollment'].package.name }}
+                                    {{ item['count'] }} {{ item['schedule_name'][:4] }}
                                 </div>
                                 {% endfor %}
                                 {% if schedule_data[day_name]['enrollments']|length > 3 %}
