@@ -10,7 +10,7 @@
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
+        <div class="container-fluid px-3">
             <a class="navbar-brand" href="{{ url_for('index') }}">
                 <i class="bi bi-people-fill"></i> Staffing Calculator
             </a>
@@ -57,6 +57,11 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('monthly_schedule') }}">
                             <i class="bi bi-calendar-month"></i> Schedule
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('manage_expenses') }}">
+                            <i class="bi bi-cash-stack"></i> Expenses
                         </a>
                     </li>
                 </ul>

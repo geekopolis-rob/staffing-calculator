@@ -1,0 +1,446 @@
+{% extends "base.html" %}
+
+{% block title %}Expenses - Staffing Calculator{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h2><i class="bi bi-cash-stack"></i> Monthly Expenses</h2>
+        <p class="text-muted">Manage fixed monthly expenses and per-child variable costs</p>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row text-center mb-4">
+    <div class="col-md-3 mb-2">
+        <div class="card">
+            <div class="card-body py-3">
+                <h4 class="text-primary mb-0">${{ "%.2f"|format(total_fixed) }}</h4>
+                <small class="text-muted">Total Fixed</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card">
+            <div class="card-body py-3">
+                <h4 class="text-info mb-0">${{ "%.2f"|format(total_variable) }}</h4>
+                <small class="text-muted">Total Variable</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card">
+            <div class="card-body py-3">
+                <h4 class="text-success mb-0">${{ "%.2f"|format(grand_total) }}</h4>
+                <small class="text-muted">Grand Total</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-2">
+        <div class="card">
+            <div class="card-body py-3">
+                <h4 class="text-warning mb-0">${{ "%.2f"|format(per_child_monthly) }}</h4>
+                <small class="text-muted">Per Child/Month</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Fixed Monthly Expenses -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-building"></i> Fixed Monthly Expenses</h5>
+        <button type="button" class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#addFixedModal">
+            <i class="bi bi-plus-lg"></i> Add Expense
+        </button>
+    </div>
+    <div class="card-body">
+        {% if grouped_fixed %}
+        {% for cat_key, cat_data in grouped_fixed.items() %}
+        <h6 class="mt-3 mb-2">
+            <i class="bi bi-{% if cat_key == 'utility' %}lightning{% elif cat_key == 'lease' %}house{% elif cat_key == 'professional' %}briefcase{% else %}mortarboard{% endif %}"></i>
+            {{ cat_data.label }}
+            <span class="badge bg-secondary float-end">${{ "%.2f"|format(cat_data.subtotal) }}/mo</span>
+        </h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-3">
+                <thead class="table-light">
+                    <tr>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th class="text-end">Amount</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for expense in cat_data.expenses %}
+                    <tr class="{{ 'text-muted' if not expense.is_active }}">
+                        <td><strong>{{ expense.name }}</strong></td>
+                        <td><small>{{ expense.description or '' }}</small></td>
+                        <td class="text-end">${{ "%.2f"|format(expense.monthly_amount) }}</td>
+                        <td class="text-center">
+                            <span class="badge {% if expense.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ 'Active' if expense.is_active else 'Inactive' }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-sm btn-primary"
+                                    data-bs-toggle="modal" data-bs-target="#editFixedModal{{ expense.id }}" title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <form method="POST" action="{{ url_for('toggle_fixed_expense', id=expense.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-warning" title="Toggle Active">
+                                    <i class="bi bi-toggle-{{ 'on' if expense.is_active else 'off' }}"></i>
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ url_for('delete_fixed_expense', id=expense.id) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-danger"
+                                        onclick="return confirm('Delete {{ expense.name }}?')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-muted text-center mb-0">No fixed expenses yet. Click "Add Expense" to get started.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Edit Fixed Expense Modals -->
+{% for cat_key, cat_data in grouped_fixed.items() %}
+{% for expense in cat_data.expenses %}
+<div class="modal fade" id="editFixedModal{{ expense.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Fixed Expense</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('edit_fixed_expense', id=expense.id) }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-control" name="name" value="{{ expense.name }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Category</label>
+                        <select class="form-select" name="category" required>
+                            {% for key, label in expense_categories.items() %}
+                            <option value="{{ key }}" {{ 'selected' if expense.category == key }}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Monthly Amount</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" class="form-control" name="monthly_amount"
+                                   value="{{ expense.monthly_amount }}" step="0.01" min="0" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <input type="text" class="form-control" name="description" value="{{ expense.description or '' }}">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endfor %}
+
+<!-- Per-Child Variable Costs -->
+<div class="card mb-4">
+    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-people"></i> Per-Child Variable Costs</h5>
+        <button type="button" class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#addPerChildModal">
+            <i class="bi bi-plus-lg"></i> Add Cost
+        </button>
+    </div>
+    <div class="card-body">
+        {% if grouped_per_child %}
+        <div class="table-responsive mb-4">
+            <table class="table table-sm table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Cost Item</th>
+                        <th class="text-center">Infant Core</th>
+                        <th class="text-center">Infant Extended</th>
+                        <th class="text-center">Child Core</th>
+                        <th class="text-center">Child Extended</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for name, data in grouped_per_child.items() %}
+                    <tr class="{{ 'text-muted' if not data.is_active }}">
+                        <td>
+                            <strong>{{ name }}</strong>
+                            {% if data.description %}
+                            <br><small class="text-muted">{{ data.description }}</small>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">${{ "%.2f"|format(data.rates.get(('infant', 'core'), 0)) }}</td>
+                        <td class="text-center">${{ "%.2f"|format(data.rates.get(('infant', 'extended'), 0)) }}</td>
+                        <td class="text-center">${{ "%.2f"|format(data.rates.get(('child', 'core'), 0)) }}</td>
+                        <td class="text-center">${{ "%.2f"|format(data.rates.get(('child', 'extended'), 0)) }}</td>
+                        <td class="text-center">
+                            <span class="badge {% if data.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                {{ 'Active' if data.is_active else 'Inactive' }}
+                            </span>
+                        </td>
+                        <td class="text-center text-nowrap">
+                            <button type="button" class="btn btn-sm btn-primary"
+                                    data-bs-toggle="modal" data-bs-target="#editPerChildModal_{{ name|replace(' ', '_') }}" title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <form method="POST" action="{{ url_for('toggle_per_child_cost', name=name) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-warning" title="Toggle Active">
+                                    <i class="bi bi-toggle-{{ 'on' if data.is_active else 'off' }}"></i>
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ url_for('delete_per_child_cost', name=name) }}" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-danger"
+                                        onclick="return confirm('Delete {{ name }}?')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Calculated Breakdown -->
+        {% if variable_breakdown %}
+        <h6 class="mb-2"><i class="bi bi-calculator"></i> Calculated Breakdown ({{ settings.total_children }} children enrolled)</h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+                <thead class="table-light">
+                    <tr>
+                        <th>Item</th>
+                        <th>Group</th>
+                        <th class="text-center">Rate</th>
+                        <th class="text-center">Children</th>
+                        <th class="text-end">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in variable_breakdown %}
+                    <tr>
+                        <td>{{ item.name }}</td>
+                        <td>
+                            <span class="badge bg-{{ 'warning' if item.age_group_type == 'infant' else 'success' }}">
+                                {{ age_group_types[item.age_group_type].name }}
+                            </span>
+                            <span class="badge bg-{{ 'primary' if item.schedule_type == 'core' else 'info' }}">
+                                {{ schedule_types[item.schedule_type].name }}
+                            </span>
+                        </td>
+                        <td class="text-center">${{ "%.2f"|format(item.rate) }}</td>
+                        <td class="text-center">{{ item.children }}</td>
+                        <td class="text-end">${{ "%.2f"|format(item.total) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="table-dark">
+                        <td colspan="4"><strong>Total Variable Expenses</strong></td>
+                        <td class="text-end"><strong>${{ "%.2f"|format(total_variable) }}</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="text-muted text-center mb-0">No per-child costs yet. Click "Add Cost" to get started.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Edit Per-Child Cost Modals -->
+{% for name, data in grouped_per_child.items() %}
+<div class="modal fade" id="editPerChildModal_{{ name|replace(' ', '_') }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Per-Child Cost</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('edit_per_child_cost', name=name) }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Cost Name</label>
+                        <input type="text" class="form-control" name="name" value="{{ name }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <input type="text" class="form-control" name="description" value="{{ data.description or '' }}">
+                    </div>
+                    <label class="form-label">Monthly Rates by Age/Schedule</label>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label"><small>Infant Core</small></label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" name="rate_infant_core"
+                                       value="{{ data.rates.get(('infant', 'core'), 0) }}" step="0.01" min="0" required>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label"><small>Infant Extended</small></label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" name="rate_infant_extended"
+                                       value="{{ data.rates.get(('infant', 'extended'), 0) }}" step="0.01" min="0" required>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label"><small>Child Core</small></label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" name="rate_child_core"
+                                       value="{{ data.rates.get(('child', 'core'), 0) }}" step="0.01" min="0" required>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label"><small>Child Extended</small></label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" name="rate_child_extended"
+                                       value="{{ data.rates.get(('child', 'extended'), 0) }}" step="0.01" min="0" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Add Fixed Expense Modal -->
+<div class="modal fade" id="addFixedModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-lg"></i> Add Fixed Expense</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_fixed_expense') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Category</label>
+                        <select class="form-select" name="category" required>
+                            {% for key, label in expense_categories.items() %}
+                            <option value="{{ key }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Monthly Amount</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" class="form-control" name="monthly_amount" step="0.01" min="0" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <input type="text" class="form-control" name="description">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Expense</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Per-Child Cost Modal -->
+<div class="modal fade" id="addPerChildModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-lg"></i> Add Per-Child Cost</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_per_child_cost') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Cost Name</label>
+                        <input type="text" class="form-control" name="name" required
+                               placeholder="e.g., Supplies, Snacks/Food">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <input type="text" class="form-control" name="description">
+                    </div>
+                    <label class="form-label">Monthly Rates by Age/Schedule</label>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label"><small>Infant Core</small></label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" name="rate_infant_core"
+                                       step="0.01" min="0" value="0" required>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label"><small>Infant Extended</small></label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" name="rate_infant_extended"
+                                       step="0.01" min="0" value="0" required>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label"><small>Child Core</small></label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" name="rate_child_core"
+                                       step="0.01" min="0" value="0" required>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label"><small>Child Extended</small></label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" name="rate_child_extended"
+                                       step="0.01" min="0" value="0" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Cost</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

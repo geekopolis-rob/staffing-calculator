@@ -25,6 +25,13 @@ AGE_GROUP_TYPES = {
     'child': {'name': 'Child', 'description': '2+ years'}
 }
 
+EXPENSE_CATEGORIES = {
+    'utility': 'Utilities',
+    'lease': 'Lease/Rent',
+    'professional': 'Professional Services',
+    'contract': 'Class Contracts'
+}
+
 # Template filters
 @app.template_filter('format_time')
 def format_time_filter(time_str):
@@ -276,6 +283,28 @@ class CapacitySettings(db.Model):
             db.session.add(settings)
             db.session.commit()
         return settings
+
+
+class FixedExpense(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    category = db.Column(db.String(50), nullable=False)
+    monthly_amount = db.Column(db.Float, nullable=False, default=0.0)
+    description = db.Column(db.Text)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class PerChildCost(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    age_group_type = db.Column(db.String(20), nullable=False)  # 'infant' or 'child'
+    schedule_type = db.Column(db.String(20), nullable=False)   # 'core' or 'extended'
+    monthly_rate = db.Column(db.Float, nullable=False, default=0.0)
+    description = db.Column(db.Text)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
 
 # Permit levels and their supervision capabilities
 PERMIT_LEVELS = {
@@ -1053,6 +1082,30 @@ def calculate_daily_labor(core_infants, core_children, extended_infants, extende
         'daily_cost': round(daily_cost, 2),
         'avg_rate': round(avg_rate, 2)
     }
+
+
+def calculate_per_child_expenses(settings, per_child_costs):
+    """Calculate total variable expenses based on enrollment distribution and per-child rates."""
+    total = 0.0
+    breakdown = []
+    for cost in per_child_costs:
+        if not cost.is_active:
+            continue
+        age_pct = settings.infant_percent if cost.age_group_type == 'infant' else settings.child_percent
+        sched_pct = settings.core_percent if cost.schedule_type == 'core' else settings.extended_percent
+        bucket_count = settings.total_children * (age_pct / 100) * (sched_pct / 100)
+        line_total = round(bucket_count * cost.monthly_rate, 2)
+        total += line_total
+        breakdown.append({
+            'name': cost.name,
+            'age_group_type': cost.age_group_type,
+            'schedule_type': cost.schedule_type,
+            'rate': cost.monthly_rate,
+            'children': round(bucket_count, 1),
+            'total': line_total
+        })
+    return round(total, 2), breakdown
+
 
 # Routes
 @app.route('/')
@@ -1884,6 +1937,169 @@ def calculate_capacity():
     results = calculate_capacity_plan(age_mix, schedule_mix, days_mix, total_children)
     return jsonify(results)
 
+
+# Expense routes
+@app.route('/expenses')
+def manage_expenses():
+    fixed_expenses = FixedExpense.query.order_by(FixedExpense.category, FixedExpense.name).all()
+    per_child_costs = PerChildCost.query.order_by(PerChildCost.name, PerChildCost.age_group_type, PerChildCost.schedule_type).all()
+    settings = CapacitySettings.get_or_create()
+
+    # Group fixed expenses by category
+    grouped_fixed = {}
+    for cat_key, cat_label in EXPENSE_CATEGORIES.items():
+        items = [e for e in fixed_expenses if e.category == cat_key]
+        if items:
+            grouped_fixed[cat_key] = {
+                'label': cat_label,
+                'expenses': items,
+                'subtotal': sum(e.monthly_amount for e in items if e.is_active)
+            }
+
+    # Group per-child costs by name
+    grouped_per_child = {}
+    for cost in per_child_costs:
+        if cost.name not in grouped_per_child:
+            grouped_per_child[cost.name] = {
+                'description': cost.description,
+                'is_active': cost.is_active,
+                'rates': {}
+            }
+        grouped_per_child[cost.name]['rates'][(cost.age_group_type, cost.schedule_type)] = cost.monthly_rate
+
+    total_fixed = sum(e.monthly_amount for e in fixed_expenses if e.is_active)
+    total_variable, variable_breakdown = calculate_per_child_expenses(settings, per_child_costs)
+    grand_total = total_fixed + total_variable
+    total_children = settings.total_children if settings.total_children > 0 else 1
+    per_child_monthly = round(grand_total / total_children, 2)
+
+    return render_template('expenses.html',
+                         grouped_fixed=grouped_fixed,
+                         grouped_per_child=grouped_per_child,
+                         variable_breakdown=variable_breakdown,
+                         total_fixed=total_fixed,
+                         total_variable=total_variable,
+                         grand_total=grand_total,
+                         per_child_monthly=per_child_monthly,
+                         settings=settings,
+                         expense_categories=EXPENSE_CATEGORIES,
+                         age_group_types=AGE_GROUP_TYPES,
+                         schedule_types=SCHEDULE_TYPES)
+
+
+@app.route('/expenses/fixed/add', methods=['POST'])
+def add_fixed_expense():
+    expense = FixedExpense(
+        name=request.form['name'],
+        category=request.form['category'],
+        monthly_amount=float(request.form['monthly_amount']),
+        description=request.form.get('description', ''),
+        is_active=True
+    )
+    db.session.add(expense)
+    db.session.commit()
+    return redirect(url_for('manage_expenses'))
+
+
+@app.route('/expenses/fixed/edit/<int:id>', methods=['POST'])
+def edit_fixed_expense(id):
+    expense = FixedExpense.query.get_or_404(id)
+    expense.name = request.form['name']
+    expense.category = request.form['category']
+    expense.monthly_amount = float(request.form['monthly_amount'])
+    expense.description = request.form.get('description', '')
+    db.session.commit()
+    return redirect(url_for('manage_expenses'))
+
+
+@app.route('/expenses/fixed/delete/<int:id>', methods=['POST'])
+def delete_fixed_expense(id):
+    expense = FixedExpense.query.get_or_404(id)
+    db.session.delete(expense)
+    db.session.commit()
+    return redirect(url_for('manage_expenses'))
+
+
+@app.route('/expenses/fixed/toggle/<int:id>', methods=['POST'])
+def toggle_fixed_expense(id):
+    expense = FixedExpense.query.get_or_404(id)
+    expense.is_active = not expense.is_active
+    db.session.commit()
+    return redirect(url_for('manage_expenses'))
+
+
+@app.route('/expenses/per-child/add', methods=['POST'])
+def add_per_child_cost():
+    name = request.form['name']
+    description = request.form.get('description', '')
+    for age in ['infant', 'child']:
+        for sched in ['core', 'extended']:
+            rate = float(request.form.get(f'rate_{age}_{sched}', 0))
+            cost = PerChildCost(
+                name=name,
+                age_group_type=age,
+                schedule_type=sched,
+                monthly_rate=rate,
+                description=description,
+                is_active=True
+            )
+            db.session.add(cost)
+    db.session.commit()
+    return redirect(url_for('manage_expenses'))
+
+
+@app.route('/expenses/per-child/edit/<name>', methods=['POST'])
+def edit_per_child_cost(name):
+    costs = PerChildCost.query.filter_by(name=name).all()
+    new_name = request.form.get('name', name)
+    description = request.form.get('description', '')
+    for cost in costs:
+        cost.name = new_name
+        cost.description = description
+        cost.monthly_rate = float(request.form.get(f'rate_{cost.age_group_type}_{cost.schedule_type}', cost.monthly_rate))
+    db.session.commit()
+    return redirect(url_for('manage_expenses'))
+
+
+@app.route('/expenses/per-child/delete/<name>', methods=['POST'])
+def delete_per_child_cost(name):
+    PerChildCost.query.filter_by(name=name).delete()
+    db.session.commit()
+    return redirect(url_for('manage_expenses'))
+
+
+@app.route('/expenses/per-child/toggle/<name>', methods=['POST'])
+def toggle_per_child_cost(name):
+    costs = PerChildCost.query.filter_by(name=name).all()
+    if costs:
+        new_state = not costs[0].is_active
+        for cost in costs:
+            cost.is_active = new_state
+    db.session.commit()
+    return redirect(url_for('manage_expenses'))
+
+
+@app.route('/expenses/calculate')
+def calculate_expenses():
+    """JSON endpoint for capacity planner integration"""
+    settings = CapacitySettings.get_or_create()
+    fixed_expenses = FixedExpense.query.filter_by(is_active=True).all()
+    per_child_costs = PerChildCost.query.all()
+
+    total_fixed = sum(e.monthly_amount for e in fixed_expenses)
+    total_variable, breakdown = calculate_per_child_expenses(settings, per_child_costs)
+    grand_total = total_fixed + total_variable
+    total_children = settings.total_children if settings.total_children > 0 else 1
+
+    return jsonify({
+        'total_fixed': round(total_fixed, 2),
+        'total_variable': round(total_variable, 2),
+        'grand_total': round(grand_total, 2),
+        'per_child_monthly': round(grand_total / total_children, 2),
+        'variable_breakdown': breakdown
+    })
+
+
 @app.route('/initialize-db')
 def initialize_db():
     """Initialize database with sample data"""
@@ -2017,6 +2233,43 @@ def initialize_db():
         ]
         for staff in placeholder_staff:
             db.session.add(staff)
+        db.session.commit()
+
+    # Add default fixed expenses if none exist
+    if FixedExpense.query.count() == 0:
+        default_fixed = [
+            FixedExpense(name='Electric', category='utility', monthly_amount=350.00, description='Monthly electric bill'),
+            FixedExpense(name='Water', category='utility', monthly_amount=120.00, description='Monthly water bill'),
+            FixedExpense(name='Gas', category='utility', monthly_amount=80.00, description='Monthly gas bill'),
+            FixedExpense(name='Trash', category='utility', monthly_amount=75.00, description='Monthly trash pickup'),
+            FixedExpense(name='Internet', category='utility', monthly_amount=100.00, description='Monthly internet service'),
+            FixedExpense(name='Monthly Rent', category='lease', monthly_amount=4500.00, description='Monthly facility lease'),
+            FixedExpense(name='Bookkeeping', category='professional', monthly_amount=500.00, description='Monthly bookkeeping service'),
+        ]
+        for expense in default_fixed:
+            db.session.add(expense)
+        db.session.commit()
+
+    # Add default per-child costs if none exist
+    if PerChildCost.query.count() == 0:
+        supplies_rates = {
+            ('infant', 'core'): 50.00,
+            ('infant', 'extended'): 65.00,
+            ('child', 'core'): 40.00,
+            ('child', 'extended'): 50.00,
+        }
+        food_rates = {
+            ('infant', 'core'): 75.00,
+            ('infant', 'extended'): 100.00,
+            ('child', 'core'): 60.00,
+            ('child', 'extended'): 80.00,
+        }
+        for (age, sched), rate in supplies_rates.items():
+            db.session.add(PerChildCost(name='Supplies', age_group_type=age, schedule_type=sched,
+                                        monthly_rate=rate, description='Classroom and art supplies'))
+        for (age, sched), rate in food_rates.items():
+            db.session.add(PerChildCost(name='Snacks/Food', age_group_type=age, schedule_type=sched,
+                                        monthly_rate=rate, description='Daily snacks and food'))
         db.session.commit()
 
     return f"Database initialized. Created {len(created_plans)} fixed plans."

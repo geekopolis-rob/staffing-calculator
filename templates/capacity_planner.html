@@ -289,6 +289,42 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Total Monthly Operating Cost -->
+            <div class="card mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-cash-stack"></i> Total Monthly Operating Cost</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm mb-3">
+                        <tbody>
+                            <tr>
+                                <td>Labor Costs</td>
+                                <td class="text-end" id="opLaborCost">$0</td>
+                            </tr>
+                            <tr>
+                                <td>Fixed Expenses</td>
+                                <td class="text-end" id="opFixedCost">$0</td>
+                            </tr>
+                            <tr>
+                                <td>Variable Expenses</td>
+                                <td class="text-end" id="opVariableCost">$0</td>
+                            </tr>
+                            <tr class="table-dark">
+                                <td><strong>Total Monthly Cost</strong></td>
+                                <td class="text-end"><strong id="opTotalCost">$0</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Per Child/Month (all-in)</td>
+                                <td class="text-end fw-bold text-primary" id="opPerChild">$0</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <a href="{{ url_for('manage_expenses') }}" class="btn btn-sm btn-outline-danger">
+                        <i class="bi bi-pencil"></i> Manage Expenses
+                    </a>
+                </div>
+            </div>
         </div>
 
         <!-- Placeholder when no results -->
@@ -575,6 +611,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 `${labor.available_staff.total} total (${labor.available_staff.teachers} teachers, ${labor.available_staff.aides} aides)`;
             document.getElementById('avgTeacherRate').textContent = labor.available_staff.avg_teacher_rate;
             document.getElementById('avgAideRate').textContent = labor.available_staff.avg_aide_rate;
+
+            // Fetch expenses and populate operating cost card
+            fetch('/expenses/calculate')
+                .then(r => r.json())
+                .then(exp => {
+                    const laborMonthly = labor.costs.monthly;
+                    const totalOp = laborMonthly + exp.grand_total;
+                    const totalChildren = parseInt(document.getElementById('totalChildren').value) || 1;
+
+                    document.getElementById('opLaborCost').textContent = '$' + laborMonthly.toLocaleString();
+                    document.getElementById('opFixedCost').textContent = '$' + exp.total_fixed.toLocaleString();
+                    document.getElementById('opVariableCost').textContent = '$' + exp.total_variable.toLocaleString();
+                    document.getElementById('opTotalCost').textContent = '$' + totalOp.toLocaleString();
+                    document.getElementById('opPerChild').textContent = '$' + Math.round(totalOp / totalChildren).toLocaleString();
+                });
         }
     }
 
