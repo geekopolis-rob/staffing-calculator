@@ -11,8 +11,8 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container-fluid px-3">
-            <a class="navbar-brand" href="{{ url_for('index') }}">
-                <i class="bi bi-people-fill"></i> Staffing Calculator
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+                <i class="bi bi-people-fill"></i> HTH Preschool
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -20,18 +20,33 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}">
-                            <i class="bi bi-calculator"></i> Staffing
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">
+                            <i class="bi bi-speedometer2"></i> Dashboard
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('manage_age_groups') }}">
-                            <i class="bi bi-diagram-3"></i> Age Groups
+                        <a class="nav-link" href="{{ url_for('capacity_planner') }}">
+                            <i class="bi bi-sliders"></i> Enrollment
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('monthly_schedule') }}">
+                            <i class="bi bi-calendar-month"></i> Schedule
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('staffing_calculator') }}">
+                            <i class="bi bi-calculator"></i> Staffing
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('manage_staff') }}">
                             <i class="bi bi-person-badge"></i> Staff
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('manage_age_groups') }}">
+                            <i class="bi bi-diagram-3"></i> Age Groups
                         </a>
                     </li>
                     <li class="nav-item">
@@ -47,16 +62,6 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('manage_packages') }}">
                             <i class="bi bi-box-seam"></i> Packages
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('capacity_planner') }}">
-                            <i class="bi bi-sliders"></i> Enrollment
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('monthly_schedule') }}">
-                            <i class="bi bi-calendar-month"></i> Schedule
                         </a>
                     </li>
                     <li class="nav-item">

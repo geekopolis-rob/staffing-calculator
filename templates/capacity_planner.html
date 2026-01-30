@@ -3,8 +3,8 @@
 {% block title %}Enrollment Planning{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-lg-5">
+<div class="row justify-content-center">
+    <div class="col-lg-6">
         <div class="card mb-4">
             <div class="card-header bg-primary text-white">
                 <h5 class="mb-0"><i class="bi bi-sliders"></i> Enrollment Planning</h5>
@@ -104,233 +104,11 @@
                     <small class="text-muted" id="daysValidation">Total: 100%</small>
                 </div>
 
-                <button type="button" class="btn btn-primary btn-lg w-100" id="calculateBtn">
-                    <i class="bi bi-calculator"></i> Update & Calculate
+                <button type="button" class="btn btn-primary btn-lg w-100" id="saveBtn">
+                    <i class="bi bi-save"></i> Save Settings
                 </button>
-                <small class="text-muted d-block text-center mt-2">Settings are saved automatically</small>
+                <div id="saveStatus" class="text-center mt-2" style="display: none;"></div>
             </div>
-        </div>
-    </div>
-
-    <div class="col-lg-7">
-        <!-- Results Section -->
-        <div id="resultsSection" style="display: none;">
-            <!-- Staff Requirements -->
-            <div class="card mb-4">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0"><i class="bi bi-people"></i> Staff Requirements (Peak Day)</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row text-center mb-3">
-                        <div class="col-4">
-                            <div class="border rounded p-3">
-                                <h3 class="text-primary mb-0" id="peakTotal">0</h3>
-                                <small class="text-muted">Peak Attendance</small>
-                            </div>
-                        </div>
-                        <div class="col-4">
-                            <div class="border rounded p-3">
-                                <h3 class="text-success mb-0" id="totalTeachers">0</h3>
-                                <small class="text-muted">Teachers Needed</small>
-                            </div>
-                        </div>
-                        <div class="col-4">
-                            <div class="border rounded p-3">
-                                <h6 class="text-muted mb-0" id="peakDayName">-</h6>
-                                <small class="text-muted">Peak Day</small>
-                            </div>
-                        </div>
-                    </div>
-
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Age Group</th>
-                                <th class="text-center">Peak Count</th>
-                                <th class="text-center">Ratio</th>
-                                <th class="text-center">Staff Needed</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Infants</td>
-                                <td class="text-center" id="peakInfants">0</td>
-                                <td class="text-center">1:4</td>
-                                <td class="text-center" id="infantStaff">0</td>
-                            </tr>
-                            <tr>
-                                <td>Children (2+)</td>
-                                <td class="text-center" id="peakChildren">0</td>
-                                <td class="text-center">1:12</td>
-                                <td class="text-center" id="childStaff">0</td>
-                            </tr>
-                        </tbody>
-                    </table>
-
-                    <div id="enhancedOptions" class="mt-3">
-                        <h6>Enhanced Ratio Options for Children:</h6>
-                        <div id="enhancedList"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Daily Attendance -->
-            <div class="card mb-4">
-                <div class="card-header bg-info text-white">
-                    <h5 class="mb-0"><i class="bi bi-calendar3"></i> Daily Attendance</h5>
-                </div>
-                <div class="card-body">
-                    <table class="table table-sm table-striped">
-                        <thead>
-                            <tr>
-                                <th>Day</th>
-                                <th class="text-center">Infants</th>
-                                <th class="text-center">Children</th>
-                                <th class="text-center">Total</th>
-                            </tr>
-                        </thead>
-                        <tbody id="dailyAttendance">
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Enrollment Distribution -->
-            <div class="card mb-4">
-                <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0"><i class="bi bi-grid-3x3"></i> Enrollment Distribution</h5>
-                </div>
-                <div class="card-body">
-                    <table class="table table-sm table-bordered">
-                        <thead>
-                            <tr>
-                                <th></th>
-                                <th colspan="2" class="text-center bg-warning bg-opacity-25">Infant</th>
-                                <th colspan="2" class="text-center bg-success bg-opacity-25">Child</th>
-                            </tr>
-                            <tr>
-                                <th>Days</th>
-                                <th class="text-center">Core</th>
-                                <th class="text-center">Extended</th>
-                                <th class="text-center">Core</th>
-                                <th class="text-center">Extended</th>
-                            </tr>
-                        </thead>
-                        <tbody id="distributionTable">
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Labor Costs -->
-            <div class="card mb-4">
-                <div class="card-header bg-warning text-dark">
-                    <h5 class="mb-0"><i class="bi bi-currency-dollar"></i> Labor Costs</h5>
-                </div>
-                <div class="card-body">
-                    <!-- Cost Summary -->
-                    <div class="row text-center mb-4">
-                        <div class="col-3">
-                            <div class="border rounded p-2">
-                                <h5 class="text-success mb-0" id="dailyCost">$0</h5>
-                                <small class="text-muted">Daily</small>
-                            </div>
-                        </div>
-                        <div class="col-3">
-                            <div class="border rounded p-2">
-                                <h5 class="text-success mb-0" id="weeklyCost">$0</h5>
-                                <small class="text-muted">Weekly</small>
-                            </div>
-                        </div>
-                        <div class="col-3">
-                            <div class="border rounded p-2">
-                                <h5 class="text-primary mb-0" id="monthlyCost">$0</h5>
-                                <small class="text-muted">Monthly</small>
-                            </div>
-                        </div>
-                        <div class="col-3">
-                            <div class="border rounded p-2">
-                                <h5 class="text-info mb-0" id="costPerChild">$0</h5>
-                                <small class="text-muted">Per Child/Mo</small>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Shift Breakdown -->
-                    <h6 class="mb-2">Shift Breakdown</h6>
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Shift</th>
-                                <th>Schedule</th>
-                                <th class="text-center">Hours</th>
-                                <th class="text-center">Staff</th>
-                            </tr>
-                        </thead>
-                        <tbody id="shiftBreakdown">
-                        </tbody>
-                        <tfoot>
-                            <tr class="table-light">
-                                <td colspan="2"><strong>Total Positions</strong></td>
-                                <td class="text-center" id="totalHours">-</td>
-                                <td class="text-center"><strong id="totalPositions">0</strong></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-
-                    <!-- Staff Availability -->
-                    <div class="alert alert-light mt-3 mb-0">
-                        <small>
-                            <strong>Available Staff:</strong>
-                            <span id="availableStaffSummary">-</span>
-                            <br>
-                            <strong>Avg Rates:</strong> Teachers $<span id="avgTeacherRate">0</span>/hr, Aides $<span id="avgAideRate">0</span>/hr
-                        </small>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Total Monthly Operating Cost -->
-            <div class="card mb-4">
-                <div class="card-header bg-danger text-white">
-                    <h5 class="mb-0"><i class="bi bi-cash-stack"></i> Total Monthly Operating Cost</h5>
-                </div>
-                <div class="card-body">
-                    <table class="table table-sm mb-3">
-                        <tbody>
-                            <tr>
-                                <td>Labor Costs</td>
-                                <td class="text-end" id="opLaborCost">$0</td>
-                            </tr>
-                            <tr>
-                                <td>Fixed Expenses</td>
-                                <td class="text-end" id="opFixedCost">$0</td>
-                            </tr>
-                            <tr>
-                                <td>Variable Expenses</td>
-                                <td class="text-end" id="opVariableCost">$0</td>
-                            </tr>
-                            <tr class="table-dark">
-                                <td><strong>Total Monthly Cost</strong></td>
-                                <td class="text-end"><strong id="opTotalCost">$0</strong></td>
-                            </tr>
-                            <tr>
-                                <td>Per Child/Month (all-in)</td>
-                                <td class="text-end fw-bold text-primary" id="opPerChild">$0</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <a href="{{ url_for('manage_expenses') }}" class="btn btn-sm btn-outline-danger">
-                        <i class="bi bi-pencil"></i> Manage Expenses
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Placeholder when no results -->
-        <div id="placeholder" class="text-center text-muted py-5">
-            <i class="bi bi-sliders" style="font-size: 4rem;"></i>
-            <p class="mt-3">Adjust the ratios and click Update to see capacity analysis</p>
         </div>
     </div>
 </div>
@@ -420,8 +198,8 @@ document.addEventListener('DOMContentLoaded', function() {
         input.addEventListener('input', updateDaysBars);
     });
 
-    // Calculate button
-    document.getElementById('calculateBtn').addEventListener('click', function() {
+    // Save button
+    document.getElementById('saveBtn').addEventListener('click', function() {
         const infantPercent = parseInt(document.getElementById('infantPercent').value) || 0;
         const childPercent = parseInt(document.getElementById('childPercent').value) || 0;
         const corePercent = parseInt(document.getElementById('corePercent').value) || 0;
@@ -433,15 +211,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Validate
         if (infantPercent + childPercent !== 100) {
-            alert('Age mix must total 100%');
+            showStatus('Age mix must total 100%', 'danger');
             return;
         }
         if (corePercent + extendedPercent !== 100) {
-            alert('Schedule mix must total 100%');
+            showStatus('Schedule mix must total 100%', 'danger');
             return;
         }
         if (fullPercent + mwfPercent + tthPercent !== 100) {
-            alert('Days mix must total 100%');
+            showStatus('Days mix must total 100%', 'danger');
             return;
         }
 
@@ -452,187 +230,44 @@ document.addEventListener('DOMContentLoaded', function() {
             total_children: totalChildren
         };
 
-        fetch('/capacity-planner/calculate', {
+        const btn = document.getElementById('saveBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass"></i> Saving...';
+
+        fetch('/capacity-planner/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         })
         .then(response => response.json())
-        .then(results => {
-            displayResults(results);
+        .then(result => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-save"></i> Save Settings';
+            if (result.success) {
+                showStatus('Settings saved successfully!', 'success');
+            } else {
+                showStatus(result.error || 'Error saving settings', 'danger');
+            }
         })
         .catch(error => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-save"></i> Save Settings';
             console.error('Error:', error);
-            alert('Error calculating capacity');
+            showStatus('Error saving settings', 'danger');
         });
     });
 
-    function displayResults(results) {
-        document.getElementById('placeholder').style.display = 'none';
-        document.getElementById('resultsSection').style.display = 'block';
+    function showStatus(message, type) {
+        const statusEl = document.getElementById('saveStatus');
+        statusEl.style.display = 'block';
+        statusEl.className = 'text-center mt-2 text-' + type;
+        statusEl.innerHTML = '<small>' + message + '</small>';
 
-        const staff = results.staff_requirements;
-
-        // Staff requirements
-        document.getElementById('peakDayName').textContent = staff.peak_day;
-        document.getElementById('peakTotal').textContent = staff.peak_total;
-        document.getElementById('peakInfants').textContent = staff.peak_infants;
-        document.getElementById('peakChildren').textContent = staff.peak_children;
-        document.getElementById('infantStaff').textContent = staff.infant_staff.count;
-        document.getElementById('childStaff').textContent = staff.child_staff.count;
-        document.getElementById('totalTeachers').textContent = staff.total_teachers_needed;
-
-        // Enhanced options
-        const enhancedList = document.getElementById('enhancedList');
-        if (staff.enhanced_options && staff.enhanced_options.length > 0) {
-            document.getElementById('enhancedOptions').style.display = 'block';
-            enhancedList.innerHTML = staff.enhanced_options.map(opt =>
-                `<div class="alert alert-light py-2 mb-2">
-                    <strong>${opt.ratio}</strong>: ${opt.description}<br>
-                    <small class="text-muted">${opt.teachers_needed} teacher(s) + ${opt.aides_needed} aide(s) = ${opt.total_staff} total</small>
-                </div>`
-            ).join('');
-        } else {
-            document.getElementById('enhancedOptions').style.display = 'none';
-        }
-
-        // Daily attendance
-        const dailyTbody = document.getElementById('dailyAttendance');
-        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-        dailyTbody.innerHTML = days.map(day => {
-            const data = results.daily_attendance[day];
-            const isPeak = day === staff.peak_day;
-            return `<tr class="${isPeak ? 'table-warning' : ''}">
-                <td>${day} ${isPeak ? '<span class="badge bg-warning text-dark">Peak</span>' : ''}</td>
-                <td class="text-center">${data.infants}</td>
-                <td class="text-center">${data.children}</td>
-                <td class="text-center fw-bold">${data.total}</td>
-            </tr>`;
-        }).join('');
-
-        // Distribution table
-        const distTbody = document.getElementById('distributionTable');
-        const dayPatterns = [
-            { key: 'full', name: 'Mon-Fri' },
-            { key: 'mwf', name: 'M/W/F' },
-            { key: 'tth', name: 'Tu/Th' }
-        ];
-
-        distTbody.innerHTML = dayPatterns.map(pattern => {
-            const infantCore = results.distribution.find(d =>
-                d.day_pattern === pattern.key && d.age_group_type === 'infant' && d.schedule_type === 'core'
-            );
-            const infantExtended = results.distribution.find(d =>
-                d.day_pattern === pattern.key && d.age_group_type === 'infant' && d.schedule_type === 'extended'
-            );
-            const childCore = results.distribution.find(d =>
-                d.day_pattern === pattern.key && d.age_group_type === 'child' && d.schedule_type === 'core'
-            );
-            const childExtended = results.distribution.find(d =>
-                d.day_pattern === pattern.key && d.age_group_type === 'child' && d.schedule_type === 'extended'
-            );
-
-            return `<tr>
-                <td>${pattern.name}</td>
-                <td class="text-center">${infantCore ? infantCore.children : 0}</td>
-                <td class="text-center">${infantExtended ? infantExtended.children : 0}</td>
-                <td class="text-center">${childCore ? childCore.children : 0}</td>
-                <td class="text-center">${childExtended ? childExtended.children : 0}</td>
-            </tr>`;
-        }).join('');
-
-        // Add totals row
-        const totalInfantCore = results.distribution
-            .filter(d => d.age_group_type === 'infant' && d.schedule_type === 'core')
-            .reduce((sum, d) => sum + d.children, 0);
-        const totalInfantExtended = results.distribution
-            .filter(d => d.age_group_type === 'infant' && d.schedule_type === 'extended')
-            .reduce((sum, d) => sum + d.children, 0);
-        const totalChildCore = results.distribution
-            .filter(d => d.age_group_type === 'child' && d.schedule_type === 'core')
-            .reduce((sum, d) => sum + d.children, 0);
-        const totalChildExtended = results.distribution
-            .filter(d => d.age_group_type === 'child' && d.schedule_type === 'extended')
-            .reduce((sum, d) => sum + d.children, 0);
-
-        distTbody.innerHTML += `<tr class="table-dark">
-            <td><strong>Total</strong></td>
-            <td class="text-center"><strong>${totalInfantCore}</strong></td>
-            <td class="text-center"><strong>${totalInfantExtended}</strong></td>
-            <td class="text-center"><strong>${totalChildCore}</strong></td>
-            <td class="text-center"><strong>${totalChildExtended}</strong></td>
-        </tr>`;
-
-        // Labor costs
-        const labor = results.labor_costs;
-        if (labor) {
-            // Cost summary
-            document.getElementById('dailyCost').textContent = '$' + labor.costs.daily.toLocaleString();
-            document.getElementById('weeklyCost').textContent = '$' + labor.costs.weekly.toLocaleString();
-            document.getElementById('monthlyCost').textContent = '$' + labor.costs.monthly.toLocaleString();
-            document.getElementById('costPerChild').textContent = '$' + labor.costs.cost_per_child_monthly.toLocaleString();
-
-            // Shift breakdown
-            const shiftTbody = document.getElementById('shiftBreakdown');
-            let shiftRows = '';
-
-            if (labor.shifts.core.staff_needed > 0) {
-                shiftRows += `<tr>
-                    <td>Core Hours</td>
-                    <td><small>${labor.shifts.core.schedule}</small></td>
-                    <td class="text-center">${labor.shifts.core.hours}</td>
-                    <td class="text-center">${labor.shifts.core.staff_needed}</td>
-                </tr>`;
-            }
-
-            if (labor.shifts.extended_am.staff_needed > 0) {
-                shiftRows += `<tr>
-                    <td>Extended AM</td>
-                    <td><small>${labor.shifts.extended_am.schedule}</small></td>
-                    <td class="text-center">${labor.shifts.extended_am.hours}</td>
-                    <td class="text-center">${labor.shifts.extended_am.staff_needed}</td>
-                </tr>`;
-                shiftRows += `<tr>
-                    <td>Extended PM</td>
-                    <td><small>${labor.shifts.extended_pm.schedule}</small></td>
-                    <td class="text-center">${labor.shifts.extended_pm.hours}</td>
-                    <td class="text-center">${labor.shifts.extended_pm.staff_needed}</td>
-                </tr>`;
-            }
-
-            shiftTbody.innerHTML = shiftRows;
-
-            // Totals
-            document.getElementById('totalHours').textContent = labor.hours.daily + ' hrs/day';
-            document.getElementById('totalPositions').textContent = labor.positions.grand_total;
-
-            // Staff availability
-            document.getElementById('availableStaffSummary').textContent =
-                `${labor.available_staff.total} total (${labor.available_staff.teachers} teachers, ${labor.available_staff.aides} aides)`;
-            document.getElementById('avgTeacherRate').textContent = labor.available_staff.avg_teacher_rate;
-            document.getElementById('avgAideRate').textContent = labor.available_staff.avg_aide_rate;
-
-            // Fetch expenses and populate operating cost card
-            fetch('/expenses/calculate')
-                .then(r => r.json())
-                .then(exp => {
-                    const laborMonthly = labor.costs.monthly;
-                    const totalOp = laborMonthly + exp.grand_total;
-                    const totalChildren = parseInt(document.getElementById('totalChildren').value) || 1;
-
-                    document.getElementById('opLaborCost').textContent = '$' + laborMonthly.toLocaleString();
-                    document.getElementById('opFixedCost').textContent = '$' + exp.total_fixed.toLocaleString();
-                    document.getElementById('opVariableCost').textContent = '$' + exp.total_variable.toLocaleString();
-                    document.getElementById('opTotalCost').textContent = '$' + totalOp.toLocaleString();
-                    document.getElementById('opPerChild').textContent = '$' + Math.round(totalOp / totalChildren).toLocaleString();
-                });
-        }
+        // Hide after 3 seconds
+        setTimeout(() => {
+            statusEl.style.display = 'none';
+        }, 3000);
     }
-
-    // Auto-calculate on page load if total_children > 0
-    {% if settings.total_children > 0 %}
-    document.getElementById('calculateBtn').click();
-    {% endif %}
 });
 </script>
 {% endblock %}

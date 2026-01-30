@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h2 class="mb-4"><i class="bi bi-speedometer2"></i> Dashboard</h2>
+
+<!-- Row 1: KPI Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <i class="bi bi-people-fill text-primary" style="font-size: 2rem;"></i>
+                <h3 class="mt-2 mb-0" id="totalEnrolled">{{ settings.total_children }}</h3>
+                <p class="text-muted mb-0">Total Enrolled</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <i class="bi bi-person-badge text-success" style="font-size: 2rem;"></i>
+                <h3 class="mt-2 mb-0" id="staffAvailable">{{ staff_count }}</h3>
+                <p class="text-muted mb-0">Staff Available</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <i class="bi bi-cash-stack text-warning" style="font-size: 2rem;"></i>
+                <h3 class="mt-2 mb-0" id="monthlyCost">$0</h3>
+                <p class="text-muted mb-0">Monthly Cost</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <i class="bi bi-graph-up-arrow text-info" style="font-size: 2rem;"></i>
+                <h3 class="mt-2 mb-0" id="revenuePotential">$0</h3>
+                <p class="text-muted mb-0">Revenue Potential</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row 2: Detail Cards -->
+<div class="row">
+    <!-- Left Column -->
+    <div class="col-lg-6">
+        <!-- Enrollment Overview -->
+        <div class="card mb-4 border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-sliders"></i> Enrollment Overview</h5>
+            </div>
+            <div class="card-body">
+                <!-- Age Mix -->
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Age Mix</label>
+                    <div class="progress" style="height: 24px;">
+                        <div class="progress-bar bg-warning" id="infantBar" style="width: {{ settings.infant_percent }}%">
+                            <small>Infant {{ settings.infant_percent|int }}%</small>
+                        </div>
+                        <div class="progress-bar bg-success" id="childBar" style="width: {{ settings.child_percent }}%">
+                            <small>Child {{ settings.child_percent|int }}%</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Schedule Mix -->
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Schedule Mix</label>
+                    <div class="progress" style="height: 24px;">
+                        <div class="progress-bar bg-info" id="coreBar" style="width: {{ settings.core_percent }}%">
+                            <small>Core {{ settings.core_percent|int }}%</small>
+                        </div>
+                        <div class="progress-bar bg-primary" id="extendedBar" style="width: {{ settings.extended_percent }}%">
+                            <small>Extended {{ settings.extended_percent|int }}%</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Peak Day -->
+                <div class="d-flex justify-content-between align-items-center py-2 border-top">
+                    <span class="text-muted">Peak Day</span>
+                    <span class="fw-bold" id="peakDay">-</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center py-2 border-top">
+                    <span class="text-muted">Peak Attendance</span>
+                    <span class="fw-bold" id="peakAttendance">-</span>
+                </div>
+
+                <a href="{{ url_for('capacity_planner') }}" class="btn btn-outline-primary btn-sm mt-3">
+                    <i class="bi bi-pencil"></i> Edit Enrollment
+                </a>
+            </div>
+        </div>
+
+        <!-- Financial Overview -->
+        <div class="card mb-4 border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-currency-dollar"></i> Financial Overview</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm mb-3">
+                    <tbody>
+                        <tr>
+                            <td>Labor Costs</td>
+                            <td class="text-end" id="laborCost">$0</td>
+                        </tr>
+                        <tr>
+                            <td>Fixed Expenses</td>
+                            <td class="text-end" id="fixedExpenses">$0</td>
+                        </tr>
+                        <tr>
+                            <td>Variable Expenses</td>
+                            <td class="text-end" id="variableExpenses">$0</td>
+                        </tr>
+                        <tr class="table-dark">
+                            <td><strong>Total Monthly Cost</strong></td>
+                            <td class="text-end"><strong id="totalCost">$0</strong></td>
+                        </tr>
+                        <tr class="table-success">
+                            <td>Revenue Potential</td>
+                            <td class="text-end fw-bold" id="revenueRow">$0</td>
+                        </tr>
+                        <tr id="marginRow">
+                            <td>Net Margin</td>
+                            <td class="text-end fw-bold" id="netMargin">$0</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="btn-group">
+                    <a href="{{ url_for('manage_expenses') }}" class="btn btn-outline-warning btn-sm">
+                        <i class="bi bi-cash-stack"></i> Expenses
+                    </a>
+                    <a href="{{ url_for('manage_pricing') }}" class="btn btn-outline-warning btn-sm">
+                        <i class="bi bi-currency-dollar"></i> Pricing
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column -->
+    <div class="col-lg-6">
+        <!-- Staffing Summary -->
+        <div class="card mb-4 border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-people"></i> Staffing Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center mb-3">
+                    <div class="col-6">
+                        <div class="border rounded p-3">
+                            <h4 class="mb-0" id="teachersNeeded">0</h4>
+                            <small class="text-muted">Teachers Needed</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="border rounded p-3">
+                            <h4 class="mb-0" id="teachersAvailable">0</h4>
+                            <small class="text-muted">Teachers Available</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center py-2 border-top">
+                    <span class="text-muted">Total Available Staff</span>
+                    <span class="fw-bold" id="totalAvailableStaff">{{ staff_count }}</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center py-2 border-top">
+                    <span class="text-muted">Teachers</span>
+                    <span id="teacherCount">0</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center py-2 border-top">
+                    <span class="text-muted">Aides</span>
+                    <span id="aideCount">0</span>
+                </div>
+
+                <div class="alert mb-0 mt-3" id="staffAdequacy">
+                    <i class="bi bi-hourglass"></i> Loading...
+                </div>
+
+                <a href="{{ url_for('manage_staff') }}" class="btn btn-outline-success btn-sm mt-3">
+                    <i class="bi bi-person-badge"></i> Manage Staff
+                </a>
+            </div>
+        </div>
+
+        <!-- Schedule Snapshot -->
+        <div class="card mb-4 border-info">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-calendar3"></i> Schedule Snapshot</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm table-striped mb-3">
+                    <thead>
+                        <tr>
+                            <th>Day</th>
+                            <th class="text-center">Infants</th>
+                            <th class="text-center">Children</th>
+                            <th class="text-center">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dailyAttendance">
+                        <tr><td colspan="4" class="text-center text-muted">Loading...</td></tr>
+                    </tbody>
+                </table>
+
+                <a href="{{ url_for('monthly_schedule') }}" class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-calendar-month"></i> View Schedule
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Fetch dashboard summary data
+    fetch('/dashboard/summary')
+        .then(response => response.json())
+        .then(data => {
+            // KPI cards
+            document.getElementById('totalEnrolled').textContent = data.enrollment.total_children;
+            document.getElementById('staffAvailable').textContent = data.staffing.available;
+            document.getElementById('monthlyCost').textContent = '$' + data.financial.total_monthly_cost.toLocaleString();
+            document.getElementById('revenuePotential').textContent = '$' + data.financial.revenue_potential.toLocaleString();
+
+            // Enrollment overview
+            document.getElementById('peakDay').textContent = data.enrollment.peak_day;
+            document.getElementById('peakAttendance').textContent = data.enrollment.peak_attendance;
+
+            // Update progress bars
+            const infantPct = data.enrollment.age_mix.infant;
+            const childPct = data.enrollment.age_mix.child;
+            document.getElementById('infantBar').style.width = infantPct + '%';
+            document.getElementById('infantBar').innerHTML = '<small>Infant ' + infantPct + '%</small>';
+            document.getElementById('childBar').style.width = childPct + '%';
+            document.getElementById('childBar').innerHTML = '<small>Child ' + childPct + '%</small>';
+
+            const corePct = data.enrollment.schedule_mix.core;
+            const extendedPct = data.enrollment.schedule_mix.extended;
+            document.getElementById('coreBar').style.width = corePct + '%';
+            document.getElementById('coreBar').innerHTML = '<small>Core ' + corePct + '%</small>';
+            document.getElementById('extendedBar').style.width = extendedPct + '%';
+            document.getElementById('extendedBar').innerHTML = '<small>Extended ' + extendedPct + '%</small>';
+
+            // Financial overview
+            document.getElementById('laborCost').textContent = '$' + data.financial.labor_cost.toLocaleString();
+            document.getElementById('fixedExpenses').textContent = '$' + data.financial.fixed_expenses.toLocaleString();
+            document.getElementById('variableExpenses').textContent = '$' + data.financial.variable_expenses.toLocaleString();
+            document.getElementById('totalCost').textContent = '$' + data.financial.total_monthly_cost.toLocaleString();
+            document.getElementById('revenueRow').textContent = '$' + data.financial.revenue_potential.toLocaleString();
+
+            const netMargin = data.financial.net_margin;
+            const netMarginEl = document.getElementById('netMargin');
+            netMarginEl.textContent = '$' + netMargin.toLocaleString();
+            const marginRow = document.getElementById('marginRow');
+            if (netMargin >= 0) {
+                marginRow.classList.add('table-success');
+                marginRow.classList.remove('table-danger');
+            } else {
+                marginRow.classList.add('table-danger');
+                marginRow.classList.remove('table-success');
+            }
+
+            // Staffing summary
+            document.getElementById('teachersNeeded').textContent = data.staffing.teachers_needed;
+            document.getElementById('teachersAvailable').textContent = data.staffing.teachers;
+            document.getElementById('totalAvailableStaff').textContent = data.staffing.available;
+            document.getElementById('teacherCount').textContent = data.staffing.teachers;
+            document.getElementById('aideCount').textContent = data.staffing.aides;
+
+            const adequacyEl = document.getElementById('staffAdequacy');
+            if (data.staffing.is_adequate) {
+                adequacyEl.className = 'alert alert-success mb-0 mt-3';
+                adequacyEl.innerHTML = '<i class="bi bi-check-circle"></i> Staffing is adequate';
+            } else {
+                adequacyEl.className = 'alert alert-danger mb-0 mt-3';
+                const shortage = data.staffing.teachers_needed - data.staffing.teachers;
+                adequacyEl.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Need ' + shortage + ' more teacher(s)';
+            }
+
+            // Daily attendance table
+            const dailyAttendance = data.enrollment.daily_attendance;
+            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+            const peakDay = data.enrollment.peak_day;
+            const tbody = document.getElementById('dailyAttendance');
+
+            tbody.innerHTML = days.map(day => {
+                const dayData = dailyAttendance[day] || { infants: 0, children: 0, total: 0 };
+                const isPeak = day === peakDay;
+                return `<tr class="${isPeak ? 'table-warning' : ''}">
+                    <td>${day} ${isPeak ? '<span class="badge bg-warning text-dark">Peak</span>' : ''}</td>
+                    <td class="text-center">${dayData.infants}</td>
+                    <td class="text-center">${dayData.children}</td>
+                    <td class="text-center fw-bold">${dayData.total}</td>
+                </tr>`;
+            }).join('');
+        })
+        .catch(error => {
+            console.error('Error loading dashboard data:', error);
+            document.getElementById('staffAdequacy').className = 'alert alert-warning mb-0 mt-3';
+            document.getElementById('staffAdequacy').innerHTML = '<i class="bi bi-exclamation-triangle"></i> Error loading data';
+        });
+});
+</script>
+{% endblock %}

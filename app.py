@@ -1109,13 +1109,102 @@ def calculate_per_child_expenses(settings, per_child_costs):
 
 # Routes
 @app.route('/')
-def index():
+@app.route('/dashboard')
+def dashboard():
+    """Dashboard overview page - main landing page with high-level summaries"""
+    settings = CapacitySettings.get_or_create()
+    staff_count = StaffMember.query.filter_by(is_available=True).count()
+    total_staff = StaffMember.query.count()
+    return render_template('dashboard.html', settings=settings,
+                         staff_count=staff_count, total_staff=total_staff)
+
+@app.route('/staffing')
+def staffing_calculator():
+    """Staffing calculator page"""
     age_groups = AgeGroup.query.order_by(AgeGroup.min_age_months).all()
     staff = StaffMember.query.order_by(StaffMember.permit_level.desc()).all()
     return render_template('index.html',
                          age_groups=age_groups,
                          staff=staff,
                          permit_levels=PERMIT_LEVELS)
+
+@app.route('/dashboard/summary')
+def dashboard_summary():
+    """JSON endpoint providing aggregated data for dashboard"""
+    settings = CapacitySettings.get_or_create()
+
+    # Get capacity plan data
+    age_mix = settings.get_age_mix()
+    schedule_mix = settings.get_schedule_mix()
+    days_mix = settings.get_days_mix()
+    capacity_data = calculate_capacity_plan(age_mix, schedule_mix, days_mix, settings.total_children)
+
+    # Staff counts
+    available_staff = StaffMember.query.filter_by(is_available=True).all()
+    teachers = [s for s in available_staff if s.permit_level in ['teacher', 'master_teacher', 'site_supervisor', 'program_director']]
+    aides = [s for s in available_staff if s.permit_level in ['assistant', 'associate']]
+
+    # Get expenses
+    fixed_expenses = FixedExpense.query.filter_by(is_active=True).all()
+    total_fixed = sum(e.monthly_amount for e in fixed_expenses)
+
+    per_child_costs = PerChildCost.query.filter_by(is_active=True).all()
+    total_variable, _ = calculate_per_child_expenses(settings, per_child_costs)
+
+    # Get labor costs from capacity data
+    labor_monthly = capacity_data.get('labor_costs', {}).get('costs', {}).get('monthly', 0)
+    total_monthly_cost = labor_monthly + total_fixed + total_variable
+
+    # Get pricing info
+    plans = CorePlan.query.filter_by(is_active=True).all()
+    plan_prices = [p.base_price for p in plans if p.base_price > 0]
+    min_price = min(plan_prices) if plan_prices else 0
+    max_price = max(plan_prices) if plan_prices else 0
+
+    # Calculate revenue potential (simplified: average price * total children * 4.33 weeks if weekly)
+    avg_price = (min_price + max_price) / 2 if plan_prices else 0
+    weekly_plans = [p for p in plans if p.billing_period == 'weekly']
+    monthly_plans = [p for p in plans if p.billing_period == 'monthly']
+
+    # Estimate revenue: assume mix of weekly and monthly
+    if settings.total_children > 0 and plan_prices:
+        avg_weekly = sum(p.base_price for p in weekly_plans) / len(weekly_plans) if weekly_plans else 0
+        avg_monthly = sum(p.base_price for p in monthly_plans) / len(monthly_plans) if monthly_plans else avg_weekly * 4.33
+        revenue_potential = avg_monthly * settings.total_children
+    else:
+        revenue_potential = 0
+
+    return jsonify({
+        'enrollment': {
+            'total_children': settings.total_children,
+            'age_mix': age_mix,
+            'schedule_mix': schedule_mix,
+            'peak_day': capacity_data.get('staff_requirements', {}).get('peak_day', 'Monday'),
+            'peak_attendance': capacity_data.get('staff_requirements', {}).get('peak_total', 0),
+            'daily_attendance': capacity_data.get('daily_attendance', {})
+        },
+        'staffing': {
+            'available': len(available_staff),
+            'total': StaffMember.query.count(),
+            'teachers': len(teachers),
+            'aides': len(aides),
+            'teachers_needed': capacity_data.get('staff_requirements', {}).get('total_teachers_needed', 0),
+            'is_adequate': len(teachers) >= capacity_data.get('staff_requirements', {}).get('total_teachers_needed', 0)
+        },
+        'financial': {
+            'labor_cost': labor_monthly,
+            'fixed_expenses': total_fixed,
+            'variable_expenses': total_variable,
+            'total_monthly_cost': total_monthly_cost,
+            'revenue_potential': round(revenue_potential, 2),
+            'net_margin': round(revenue_potential - total_monthly_cost, 2)
+        },
+        'pricing': {
+            'plan_count': len(plans),
+            'min_price': min_price,
+            'max_price': max_price
+        }
+    })
 
 @app.route('/age-groups')
 def manage_age_groups():
