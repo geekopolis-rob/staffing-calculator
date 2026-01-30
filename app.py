@@ -1141,8 +1141,8 @@ def dashboard_summary():
 
     # Staff counts
     available_staff = StaffMember.query.filter_by(is_available=True).all()
-    teachers = [s for s in available_staff if s.permit_level in ['teacher', 'master_teacher', 'site_supervisor', 'program_director']]
-    aides = [s for s in available_staff if s.permit_level in ['assistant', 'associate']]
+    teachers = [s for s in available_staff if PERMIT_LEVELS.get(s.permit_level, {}).get('rank', 0) >= 3]
+    aides = [s for s in available_staff if PERMIT_LEVELS.get(s.permit_level, {}).get('rank', 0) < 3]
 
     # Get expenses
     fixed_expenses = FixedExpense.query.filter_by(is_active=True).all()
