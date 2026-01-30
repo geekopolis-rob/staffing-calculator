@@ -5,8 +5,8 @@
 {% block content %}
 <div class="row mb-3">
     <div class="col">
-        <h2><i class="bi bi-calendar-month"></i> Schedule Planning</h2>
-        <p class="text-muted">Typical monthly schedule based on enrollment packages (for planning purposes)</p>
+        <h2><i class="bi bi-calendar-week"></i> Weekly Schedule</h2>
+        <p class="text-muted">Weekly schedule based on enrollment mix (for planning purposes)</p>
     </div>
 </div>
 
@@ -87,331 +87,194 @@
             </tfoot>
         </table>
         <small class="text-muted">Avg hourly rate: ${{ weekly_labor.avg_rate }}/hr | Extended hours split into 2 shifts to avoid overtime</small>
+
+        <hr class="my-3">
+
+        <!-- Enrollment Breakdown -->
+        <h6 class="mb-2">Enrollment Breakdown</h6>
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2">
+                    <span><strong>Infants</strong> <small class="text-muted">(0-18 months)</small></span>
+                    <span>
+                        <span class="badge bg-warning text-dark">{{ capacity_data.schedule_summary.core.infants }} Core</span>
+                        <span class="badge bg-danger">{{ capacity_data.schedule_summary.extended.infants }} Extended</span>
+                        <strong class="ms-2">{{ capacity_data.schedule_summary.core.infants + capacity_data.schedule_summary.extended.infants }} total</strong>
+                    </span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2">
+                    <span><strong>Children</strong> <small class="text-muted">(2+ years)</small></span>
+                    <span>
+                        <span class="badge bg-info">{{ capacity_data.schedule_summary.core.children }} Core</span>
+                        <span class="badge bg-success">{{ capacity_data.schedule_summary.extended.children }} Extended</span>
+                        <strong class="ms-2">{{ capacity_data.schedule_summary.core.children + capacity_data.schedule_summary.extended.children }} total</strong>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Daily Attendance -->
+        <h6 class="mb-2">Daily Attendance</h6>
+        <div class="row text-center mb-3">
+            {% for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] %}
+            <div class="col">
+                <div class="border rounded p-2">
+                    <small class="text-muted d-block">{{ day[:3] }}</small>
+                    <strong>{{ schedule_data[day].total_children }}</strong>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Staff Ratios -->
+        <div class="d-flex align-items-center">
+            <strong class="me-2">Staff Ratios:</strong>
+            <span class="badge bg-warning text-dark me-2">1:4 Infants</span>
+            <span class="badge bg-info">1:12 Children</span>
+        </div>
     </div>
 </div>
 
 <div class="card">
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-bordered text-center">
-                <thead>
-                    <tr>
-                        <th class="bg-light">Monday</th>
-                        <th class="bg-light">Tuesday</th>
-                        <th class="bg-light">Wednesday</th>
-                        <th class="bg-light">Thursday</th>
-                        <th class="bg-light">Friday</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for week in calendar %}
-                    <tr>
-                        {% for day_name in week %}
-                        <td class="align-top p-2" style="height: 120px; width: 20%;">
-                            <div class="d-flex justify-content-between align-items-start mb-1">
-                                <span class="badge bg-secondary">{{ day_name[:3] }}</span>
-                                {% if schedule_data[day_name]['total_children'] > 0 %}
-                                <span class="badge bg-primary">{{ schedule_data[day_name]['total_children'] }}</span>
-                                {% endif %}
-                            </div>
+    <div class="card-body p-0">
+        {% for day_name in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] %}
+        {% set day = schedule_data[day_name] %}
+        <div class="border-bottom">
+            <!-- Clickable header -->
+            <div class="d-flex align-items-center p-3"
+                 style="cursor: pointer;"
+                 data-bs-toggle="collapse"
+                 data-bs-target="#detail-{{ day_name }}"
+                 onmouseover="this.style.backgroundColor='#f8f9fa'"
+                 onmouseout="this.style.backgroundColor=''">
 
-                            {% if schedule_data[day_name]['total_children'] > 0 %}
-                            <div class="small">
-                                {% for item in schedule_data[day_name]['enrollments'][:4] %}
-                                <div class="text-truncate">
-                                    {% if item['age_group_type'] == 'infant' and item['schedule_type'] == 'core' %}
-                                    <span class="badge text-dark" style="font-size: 0.7rem; background: #ffc107;">
-                                    {% elif item['age_group_type'] == 'infant' and item['schedule_type'] == 'extended' %}
-                                    <span class="badge" style="font-size: 0.7rem; background: #dc3545; color: white;">
-                                    {% elif item['age_group_type'] == 'child' and item['schedule_type'] == 'core' %}
-                                    <span class="badge" style="font-size: 0.7rem; background: #0dcaf0; color: white;">
-                                    {% else %}
-                                    <span class="badge" style="font-size: 0.7rem; background: #198754; color: white;">
-                                    {% endif %}
-                                        {{ item['age_group_name'][:3] }}
-                                    </span>
-                                    {{ item['count'] }} {{ item['schedule_type']|title }}
-                                </div>
-                                {% endfor %}
-                                {% if schedule_data[day_name]['enrollments']|length > 4 %}
-                                <div class="text-muted">+{{ schedule_data[day_name]['enrollments']|length - 4 }} more</div>
-                                {% endif %}
-                                <button class="btn btn-sm btn-outline-primary mt-1 w-100"
-                                        onclick="viewDayDetails('{{ day_name }}')">
-                                    View Details
-                                </button>
-                            </div>
-                            {% else %}
-                            <small class="text-muted">No children</small>
-                            {% endif %}
-                        </td>
-                        {% endfor %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
+                <!-- Day label -->
+                <div style="width: 80px;">
+                    <strong>{{ day_name[:3] }}</strong>
+                    <small class="d-block text-muted">{{ day.total_children }} kids</small>
+                </div>
 
-<!-- Day Details Modal -->
-<div class="modal fade" id="dayDetailsModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="dayDetailsTitle">Day Schedule</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body" id="dayDetailsBody">
-                <div class="text-center">
-                    <div class="spinner-border" role="status">
-                        <span class="visually-hidden">Loading...</span>
+                <!-- Mini timeline -->
+                <div class="flex-grow-1 mx-3">
+                    {% set timeline = day.timeline %}
+                    {% set total_minutes = timeline.latest - timeline.earliest %}
+                    {% set max_students = timeline.max_students if timeline.max_students > 0 else 1 %}
+                    {% set max_staff = timeline.max_staff if timeline.max_staff > 0 else 1 %}
+                    <!-- Time labels -->
+                    <div class="d-flex justify-content-between" style="font-size: 0.65rem; color: #999; margin-left: 32px;">
+                        <span>7am</span><span>9</span><span>12pm</span><span>3</span><span>6pm</span>
                     </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-async function viewDayDetails(dateStr) {
-    const modal = new bootstrap.Modal(document.getElementById('dayDetailsModal'));
-    const titleEl = document.getElementById('dayDetailsTitle');
-    const bodyEl = document.getElementById('dayDetailsBody');
-
-    // Show loading
-    bodyEl.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
-    modal.show();
-
-    try {
-        const response = await fetch(`/schedule/daily/${dateStr}`);
-        const data = await response.json();
-
-        titleEl.textContent = data.day_name;
-
-        // Helper to convert time to minutes since midnight
-        function timeToMinutes(timeStr) {
-            const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
-            if (!match) return 0;
-            let hours = parseInt(match[1]);
-            const minutes = parseInt(match[2]);
-            const period = match[3].toUpperCase();
-            if (period === 'PM' && hours !== 12) hours += 12;
-            if (period === 'AM' && hours === 12) hours = 0;
-            return hours * 60 + minutes;
-        }
-
-        // Find earliest and latest times for timeline (include both children and staff shifts)
-        let earliestTime = 24 * 60;
-        let latestTime = 0;
-        data.children.forEach(enrollment => {
-            const start = timeToMinutes(enrollment.start_time);
-            const end = timeToMinutes(enrollment.end_time);
-            earliestTime = Math.min(earliestTime, start);
-            latestTime = Math.max(latestTime, end);
-        });
-        // Also account for staff shift times
-        (data.staff_shifts || []).forEach(shift => {
-            const start = timeToMinutes(shift.start_time);
-            const end = timeToMinutes(shift.end_time);
-            earliestTime = Math.min(earliestTime, start);
-            latestTime = Math.max(latestTime, end);
-        });
-
-        // Round to nearest hour
-        earliestTime = Math.floor(earliestTime / 60) * 60;
-        latestTime = Math.ceil(latestTime / 60) * 60;
-        const totalMinutes = latestTime - earliestTime;
-
-        // Calculate total children at each time point for summary bar
-        const timePoints = [];
-        for (let time = earliestTime; time <= latestTime; time += 15) {
-            let count = 0;
-            data.children.forEach(enrollment => {
-                const start = timeToMinutes(enrollment.start_time);
-                const end = timeToMinutes(enrollment.end_time);
-                if (time >= start && time < end) {
-                    count += enrollment.count;
-                }
-            });
-            timePoints.push({ time, count });
-        }
-        const maxChildren = Math.max(...timePoints.map(p => p.count));
-
-        // Calculate staff coverage at each time point
-        const staffShifts = data.staff_shifts || [];
-        const staffTimePoints = [];
-        for (let time = earliestTime; time <= latestTime; time += 15) {
-            let count = 0;
-            staffShifts.forEach(shift => {
-                const start = timeToMinutes(shift.start_time);
-                const end = timeToMinutes(shift.end_time);
-                if (time >= start && time < end) {
-                    count += shift.count;
-                }
-            });
-            staffTimePoints.push({ time, count });
-        }
-        const maxStaff = Math.max(...staffTimePoints.map(p => p.count), 1);
-
-        // Timeline height: enrollment bars + gap + staff bars + two summary bars
-        const staffSectionTop = data.children.length * 40 + 20;
-        const timelineHeight = staffSectionTop + staffShifts.length * 40 + 190;
-
-        let html = `
-            <div class="alert alert-info">
-                <strong>Total Children:</strong> ${data.total_children} |
-                <strong>Staff Positions:</strong> ${data.labor ? data.labor.total_positions : data.total_staff_required} |
-                <strong>Daily Cost:</strong> $${data.labor ? data.labor.daily_cost.toFixed(2) : '—'}
-            </div>
-
-            <h6 class="border-bottom pb-2">Timeline</h6>
-            <div class="mb-4" style="position: relative; height: ${timelineHeight}px;">
-                <div style="position: absolute; top: 0; left: 60px; right: 0; height: 100%; border-left: 2px solid #dee2e6;">
-        `;
-
-        // Add time markers
-        for (let time = earliestTime; time <= latestTime; time += 60) {
-            const hours = Math.floor(time / 60);
-            const period = hours >= 12 ? 'PM' : 'AM';
-            const displayHour = hours === 0 ? 12 : (hours > 12 ? hours - 12 : hours);
-            const position = ((time - earliestTime) / totalMinutes) * 100;
-            html += `
-                <div style="position: absolute; left: ${position}%; top: 0; height: 100%; border-left: 1px solid #dee2e6;">
-                    <span style="position: absolute; top: -20px; left: -20px; font-size: 0.75rem; color: #6c757d;">${displayHour} ${period}</span>
-                </div>
-            `;
-        }
-
-        // Color mapping by age group + schedule type
-        function getEnrollmentColor(enrollment) {
-            const isInfant = enrollment.age_group_type === 'infant' || enrollment.age_group === 'Infant';
-            const isExtended = enrollment.schedule_type === 'extended' ||
-                               (enrollment.package_name && enrollment.package_name.startsWith('Exte'));
-            if (isInfant && !isExtended) return '#ffc107';  // Infant Core - yellow
-            if (isInfant && isExtended) return '#dc3545';   // Infant Extended - red
-            if (!isInfant && !isExtended) return '#0dcaf0'; // Child Core - cyan
-            return '#198754';                                // Child Extended - green
-        }
-
-        // Add enrollment bars
-        data.children.forEach((enrollment, index) => {
-            const start = timeToMinutes(enrollment.start_time);
-            const end = timeToMinutes(enrollment.end_time);
-            const leftPercent = ((start - earliestTime) / totalMinutes) * 100;
-            const widthPercent = ((end - start) / totalMinutes) * 100;
-            const top = 10 + (index * 40);
-
-            const color = getEnrollmentColor(enrollment);
-
-            const textColor = color === '#ffc107' ? '#212529' : 'white';
-            html += `
-                <div style="position: absolute; left: ${leftPercent}%; top: ${top}px; width: ${widthPercent}%; height: 30px; background: ${color}; border-radius: 4px; padding: 4px 8px; color: ${textColor}; font-size: 0.75rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
-                    <strong>${enrollment.count}</strong> ${enrollment.age_group} - ${enrollment.package_name}
-                </div>
-            `;
-        });
-
-        // Staff coverage section divider and label
-        const staffLabelTop = staffSectionTop - 5;
-        html += `<div style="position: absolute; left: -60px; top: ${staffLabelTop}px; width: calc(100% + 60px); border-top: 2px dashed #6c757d;"></div>`;
-        html += `<div style="position: absolute; left: -55px; top: ${staffLabelTop + 5}px; font-size: 0.7rem; font-weight: bold; color: #6c757d; text-transform: uppercase;">Staff</div>`;
-
-        // Add staff shift bars
-        staffShifts.forEach((shift, index) => {
-            const start = timeToMinutes(shift.start_time);
-            const end = timeToMinutes(shift.end_time);
-            const leftPercent = ((start - earliestTime) / totalMinutes) * 100;
-            const widthPercent = ((end - start) / totalMinutes) * 100;
-            const top = staffSectionTop + 10 + (index * 40);
-
-            const shiftColors = {
-                'core': '#6f42c1',
-                'extended_am': '#d63384',
-                'extended_pm': '#fd7e14'
-            };
-            const color = shiftColors[shift.shift_type] || '#6c757d';
-
-            html += `
-                <div style="position: absolute; left: ${leftPercent}%; top: ${top}px; width: ${widthPercent}%; height: 30px; background: repeating-linear-gradient(45deg, ${color}, ${color} 10px, ${color}dd 10px, ${color}dd 20px); border-radius: 4px; padding: 4px 8px; color: white; font-size: 0.75rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; border: 2px solid ${color};">
-                    <strong>${shift.label}</strong> (${shift.start_time} - ${shift.end_time})
-                </div>
-            `;
-        });
-
-        // Add summary bars at the bottom
-        const summaryTop = staffSectionTop + 10 + (staffShifts.length * 40) + 15;
-
-        // Children summary bar
-        html += `<div style="position: absolute; left: 0; top: ${summaryTop}px; width: 100%; height: 50px; border-top: 2px solid #dee2e6; padding-top: 5px;">`;
-        html += `<div style="font-size: 0.75rem; font-weight: bold; color: #6c757d; margin-bottom: 3px;">Children</div>`;
-        for (let i = 0; i < timePoints.length - 1; i++) {
-            const leftPercent = ((timePoints[i].time - earliestTime) / totalMinutes) * 100;
-            const widthPercent = ((timePoints[i+1].time - timePoints[i].time) / totalMinutes) * 100;
-            const heightPercent = maxChildren > 0 ? (timePoints[i].count / maxChildren) * 100 : 0;
-            const opacity = 0.3 + (heightPercent / 100) * 0.5;
-            html += `
-                <div style="position: absolute; left: ${leftPercent}%; bottom: 0; width: ${widthPercent}%; height: ${Math.max(heightPercent * 0.35, 2)}%; background: rgba(13, 110, 253, ${opacity}); border-right: 1px solid rgba(13, 110, 253, 0.3);">
-                    ${timePoints[i].count > 0 ? `<span style="position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 0.7rem; font-weight: bold; color: #0d6efd;">${timePoints[i].count}</span>` : ''}
-                </div>
-            `;
-        }
-        html += `</div>`;
-
-        // Staff coverage summary bar
-        const staffSummaryTop = summaryTop + 60;
-        html += `<div style="position: absolute; left: 0; top: ${staffSummaryTop}px; width: 100%; height: 50px; border-top: 2px solid #dee2e6; padding-top: 5px;">`;
-        html += `<div style="font-size: 0.75rem; font-weight: bold; color: #6c757d; margin-bottom: 3px;">Staff Coverage</div>`;
-        for (let i = 0; i < staffTimePoints.length - 1; i++) {
-            const leftPercent = ((staffTimePoints[i].time - earliestTime) / totalMinutes) * 100;
-            const widthPercent = ((staffTimePoints[i+1].time - staffTimePoints[i].time) / totalMinutes) * 100;
-            const heightPercent = maxStaff > 0 ? (staffTimePoints[i].count / maxStaff) * 100 : 0;
-            const opacity = 0.3 + (heightPercent / 100) * 0.5;
-            html += `
-                <div style="position: absolute; left: ${leftPercent}%; bottom: 0; width: ${widthPercent}%; height: ${Math.max(heightPercent * 0.35, 2)}%; background: rgba(111, 66, 193, ${opacity}); border-right: 1px solid rgba(111, 66, 193, 0.3);">
-                    ${staffTimePoints[i].count > 0 ? `<span style="position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 0.7rem; font-weight: bold; color: #6f42c1;">${staffTimePoints[i].count}</span>` : ''}
-                </div>
-            `;
-        }
-        html += `</div>`;
-
-        html += `
-                </div>
-            </div>
-
-            <h6 class="border-bottom pb-2">Age Group Breakdown</h6>
-            <div class="row mb-3">
-        `;
-
-        data.age_group_breakdown.forEach(ag => {
-            html += `
-                <div class="col-md-4 mb-2">
-                    <div class="card">
-                        <div class="card-body">
-                            <h6>${ag.name}</h6>
-                            <p class="mb-1"><strong>Children:</strong> ${ag.count}</p>
-                            <p class="mb-1"><strong>Ratio:</strong> ${ag.ratio}</p>
-                            <p class="mb-0"><strong>Staff Needed:</strong> ${ag.required_staff}</p>
+                    <!-- Kids bar -->
+                    <div class="d-flex align-items-center" style="margin-bottom: 4px;">
+                        <span style="width: 30px; font-size: 0.65rem; color: #666;">Kids</span>
+                        <div class="position-relative flex-grow-1" style="height: 12px; background: #e9ecef; border-radius: 2px;">
+                            {% for interval in timeline.intervals %}
+                            {% if interval.students > 0 %}
+                            {% set left_pct = ((interval.time - timeline.earliest) / total_minutes * 100)|round(1) %}
+                            {% set width_pct = (15 / total_minutes * 100)|round(1) %}
+                            {% set opacity = (0.3 + 0.7 * (interval.students / max_students))|round(2) %}
+                            <div style="position: absolute; left: {{ left_pct }}%; width: {{ width_pct }}%; height: 100%; background: rgba(13, 110, 253, {{ opacity }});"></div>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <!-- Staff bar -->
+                    <div class="d-flex align-items-center">
+                        <span style="width: 30px; font-size: 0.65rem; color: #666;">Staff</span>
+                        <div class="position-relative flex-grow-1" style="height: 12px; background: #e9ecef; border-radius: 2px;">
+                            {% for interval in timeline.intervals %}
+                            {% if interval.staff > 0 or interval.students > 0 %}
+                            {% set left_pct = ((interval.time - timeline.earliest) / total_minutes * 100)|round(1) %}
+                            {% set width_pct = (15 / total_minutes * 100)|round(1) %}
+                            {% set opacity = (0.3 + 0.7 * (interval.staff / max_staff))|round(2) if interval.staff > 0 else 1 %}
+                            {% if interval.students > 0 and interval.staff == 0 %}
+                            <div style="position: absolute; left: {{ left_pct }}%; width: {{ width_pct }}%; height: 100%; background: #ffc107;"></div>
+                            {% elif interval.students > 0 and interval.staff > 0 %}
+                            <div style="position: absolute; left: {{ left_pct }}%; width: {{ width_pct }}%; height: 100%; background: rgba(25, 135, 84, {{ opacity }});"></div>
+                            {% elif interval.staff > 0 %}
+                            <div style="position: absolute; left: {{ left_pct }}%; width: {{ width_pct }}%; height: 100%; background: rgba(111, 66, 193, {{ opacity }});"></div>
+                            {% endif %}
+                            {% endif %}
+                            {% endfor %}
                         </div>
                     </div>
                 </div>
-            `;
-        });
 
-        html += `
+                <!-- Toggle chevron -->
+                <i class="bi bi-chevron-down text-muted"></i>
             </div>
-        `;
 
-        bodyEl.innerHTML = html;
+            <!-- Collapsible detail section -->
+            <div class="collapse" id="detail-{{ day_name }}">
+                <div class="px-3 pb-3">
+                    <!-- Summary stats -->
+                    <div class="d-flex gap-4 mb-2 small text-muted">
+                        <span>{{ day.labor.total_positions }} staff</span>
+                        <span>${{ "%.0f"|format(day.labor.daily_cost) }}/day</span>
+                    </div>
 
-    } catch (error) {
-        bodyEl.innerHTML = '<div class="alert alert-danger">Error loading schedule details</div>';
-    }
-}
-</script>
+                    <!-- Detailed timeline -->
+                    <div class="position-relative bg-light rounded p-2" style="margin-left: 50px;">
+                        {% set earliest = 420 %}
+                        {% set latest = 1080 %}
+                        {% set total_mins = latest - earliest %}
+
+                        <!-- Time markers -->
+                        <div class="d-flex justify-content-between mb-1" style="font-size: 0.65rem; color: #999;">
+                            <span>7am</span><span>9</span><span>12pm</span><span>3</span><span>6pm</span>
+                        </div>
+
+                        <!-- Enrollment bars -->
+                        {% for enr in day.children_detail %}
+                        {% set left = ((enr.start_minutes - earliest) / total_mins * 100)|round(1) %}
+                        {% set width = ((enr.end_minutes - enr.start_minutes) / total_mins * 100)|round(1) %}
+                        {% if enr.age_group_type == 'infant' %}
+                            {% set color = '#ffc107' if enr.schedule_type == 'core' else '#dc3545' %}
+                        {% else %}
+                            {% set color = '#0dcaf0' if enr.schedule_type == 'core' else '#198754' %}
+                        {% endif %}
+                        <div class="position-relative" style="height: 24px; margin-bottom: 4px;">
+                            <div style="position: absolute; left: {{ left }}%; width: {{ width }}%; height: 100%; background: {{ color }}; border-radius: 3px; padding: 2px 6px; font-size: 0.7rem; color: {% if color in ['#ffc107', '#0dcaf0'] %}#212529{% else %}white{% endif %}; overflow: hidden; white-space: nowrap;">
+                                <strong>{{ enr.count }}</strong> {{ enr.age_group }} {{ enr.schedule_type|title }}
+                            </div>
+                        </div>
+                        {% endfor %}
+
+                        <!-- Divider -->
+                        <div style="border-top: 1px dashed #999; margin: 8px 0;"></div>
+
+                        <!-- Staff bars -->
+                        {% for shift in day.staff_shifts %}
+                        {% set left = ((shift.start_minutes - earliest) / total_mins * 100)|round(1) %}
+                        {% set width = ((shift.end_minutes - shift.start_minutes) / total_mins * 100)|round(1) %}
+                        {% if shift.shift_type == 'core' %}{% set color = '#6f42c1' %}
+                        {% elif shift.shift_type == 'extended_am' %}{% set color = '#d63384' %}
+                        {% else %}{% set color = '#fd7e14' %}{% endif %}
+                        <div class="position-relative" style="height: 24px; margin-bottom: 4px;">
+                            <div style="position: absolute; left: {{ left }}%; width: {{ width }}%; height: 100%; background: {{ color }}; border-radius: 3px; padding: 2px 6px; font-size: 0.7rem; color: white; overflow: hidden; white-space: nowrap;">
+                                {{ shift.label }}
+                            </div>
+                        </div>
+                        {% endfor %}
+
+                        <!-- Legend -->
+                        <div class="d-flex flex-wrap gap-2 mt-2" style="font-size: 0.6rem; color: #666;">
+                            <span><span style="display: inline-block; width: 10px; height: 10px; background: #ffc107; border-radius: 2px;"></span> Infant Core</span>
+                            <span><span style="display: inline-block; width: 10px; height: 10px; background: #dc3545; border-radius: 2px;"></span> Infant Extended</span>
+                            <span><span style="display: inline-block; width: 10px; height: 10px; background: #0dcaf0; border-radius: 2px;"></span> Child Core</span>
+                            <span><span style="display: inline-block; width: 10px; height: 10px; background: #198754; border-radius: 2px;"></span> Child Extended</span>
+                            <span class="ms-2"><span style="display: inline-block; width: 10px; height: 10px; background: #6f42c1; border-radius: 2px;"></span> Core Staff</span>
+                            <span><span style="display: inline-block; width: 10px; height: 10px; background: #d63384; border-radius: 2px;"></span> Extended AM</span>
+                            <span><span style="display: inline-block; width: 10px; height: 10px; background: #fd7e14; border-radius: 2px;"></span> Extended PM</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
 {% endblock %}

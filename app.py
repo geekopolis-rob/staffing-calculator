@@ -1545,6 +1545,19 @@ def edit_enrollment(id):
     db.session.commit()
     return redirect(url_for('manage_enrollment'))
 
+def time_str_to_minutes(time_str):
+    """Convert '9:00 AM' to minutes since midnight (e.g., 540)"""
+    import re
+    match = re.match(r'(\d+):(\d+)\s*(AM|PM)', time_str, re.IGNORECASE)
+    if not match:
+        return 0
+    hours, mins = int(match.group(1)), int(match.group(2))
+    if match.group(3).upper() == 'PM' and hours != 12:
+        hours += 12
+    if match.group(3).upper() == 'AM' and hours == 12:
+        hours = 0
+    return hours * 60 + mins
+
 # Schedule Routes
 @app.route('/schedule')
 def monthly_schedule():
@@ -1627,13 +1640,114 @@ def monthly_schedule():
                 consolidated[key] = dict(item)
         enrollments = list(consolidated.values())
 
+        # Build children array with times for detailed view
+        children_detail = []
+        for item in enrollments:
+            start = '7:30 AM' if item['schedule_type'] == 'extended' else '9:00 AM'
+            end = '5:30 PM' if item['schedule_type'] == 'extended' else '3:00 PM'
+            children_detail.append({
+                'count': item['count'],
+                'age_group': item['age_group_name'],
+                'age_group_type': item['age_group_type'],
+                'schedule_type': item['schedule_type'],
+                'start_time': start,
+                'end_time': end,
+                'start_minutes': time_str_to_minutes(start),
+                'end_minutes': time_str_to_minutes(end)
+            })
+
+        # Build staff_shifts array for detailed view
+        staff_shifts = []
+        if labor['core_staff'] > 0:
+            staff_shifts.append({
+                'label': f"{labor['core_staff']} Core",
+                'count': labor['core_staff'],
+                'shift_type': 'core',
+                'start_minutes': 510,   # 8:30 AM
+                'end_minutes': 930      # 3:30 PM
+            })
+        if labor['extended_staff'] > 0:
+            staff_shifts.append({
+                'label': f"{labor['extended_staff']} Ext AM",
+                'count': labor['extended_staff'],
+                'shift_type': 'extended_am',
+                'start_minutes': 420,   # 7:00 AM
+                'end_minutes': 780      # 1:00 PM
+            })
+            staff_shifts.append({
+                'label': f"{labor['extended_staff']} Ext PM",
+                'count': labor['extended_staff'],
+                'shift_type': 'extended_pm',
+                'start_minutes': 750,   # 12:30 PM
+                'end_minutes': 1080     # 6:00 PM
+            })
+
+        # Generate timeline data for visualization (15-minute intervals from 7:00 AM to 6:00 PM)
+        # Time ranges (in minutes from midnight):
+        # Extended students: 7:30 AM (450) - 5:30 PM (1050)
+        # Core students: 9:00 AM (540) - 3:00 PM (900)
+        # Extended AM staff: 7:00 AM (420) - 1:00 PM (780)
+        # Core staff: 8:30 AM (510) - 3:30 PM (930)
+        # Extended PM staff: 12:30 PM (750) - 6:00 PM (1080)
+
+        intervals = []
+        max_students = 0
+        max_staff = 0
+
+        # Count students and staff by type for this day
+        core_students = core_infants + core_children
+        extended_students = extended_infants + extended_children
+
+        # Get staff counts from labor calculation
+        core_staff_count = labor['core_staff']
+        extended_staff_count = labor['extended_staff']
+
+        for minutes in range(420, 1081, 15):  # 7:00 AM to 6:00 PM
+            students = 0
+            staff = 0
+
+            # Extended students: 7:30 AM - 5:30 PM
+            if 450 <= minutes < 1050:
+                students += extended_students
+
+            # Core students: 9:00 AM - 3:00 PM
+            if 540 <= minutes < 900:
+                students += core_students
+
+            # Extended AM staff: 7:00 AM - 1:00 PM
+            if 420 <= minutes < 780:
+                staff += extended_staff_count
+
+            # Core staff: 8:30 AM - 3:30 PM
+            if 510 <= minutes < 930:
+                staff += core_staff_count
+
+            # Extended PM staff: 12:30 PM - 6:00 PM
+            if 750 <= minutes < 1080:
+                staff += extended_staff_count
+
+            intervals.append({'time': minutes, 'students': students, 'staff': staff})
+            max_students = max(max_students, students)
+            max_staff = max(max_staff, staff)
+
+        timeline = {
+            'intervals': intervals,
+            'earliest': 420,
+            'latest': 1080,
+            'max_students': max_students,
+            'max_staff': max_staff
+        }
+
         schedule_data[day_name] = {
             'day_name': day_name,
             'total_children': day_attendance['total'],
             'infants': day_attendance['infants'],
             'children': day_attendance['children'],
             'enrollments': enrollments,
-            'labor': labor
+            'labor': labor,
+            'timeline': timeline,
+            'children_detail': children_detail,
+            'staff_shifts': staff_shifts
         }
 
     # Calculate weekly labor summary (use peak day for positions, sum for costs)
@@ -1657,10 +1771,8 @@ def monthly_schedule():
         'avg_rate': peak_labor['avg_rate']
     }
 
-    # Create a simple 4-week calendar structure for display
-    calendar = []
-    for week in range(4):
-        calendar.append(days_of_week[:])
+    # Create a single week calendar structure for display
+    calendar = [days_of_week[:]]
 
     return render_template('schedule_monthly.html',
                          month_name="Typical Month",
