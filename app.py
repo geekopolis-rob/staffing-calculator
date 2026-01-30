@@ -1118,16 +1118,6 @@ def dashboard():
     return render_template('dashboard.html', settings=settings,
                          staff_count=staff_count, total_staff=total_staff)
 
-@app.route('/staffing')
-def staffing_calculator():
-    """Staffing calculator page"""
-    age_groups = AgeGroup.query.order_by(AgeGroup.min_age_months).all()
-    staff = StaffMember.query.order_by(StaffMember.permit_level.desc()).all()
-    return render_template('index.html',
-                         age_groups=age_groups,
-                         staff=staff,
-                         permit_levels=PERMIT_LEVELS)
-
 @app.route('/dashboard/summary')
 def dashboard_summary():
     """JSON endpoint providing aggregated data for dashboard"""
@@ -1300,22 +1290,6 @@ def manage_pricing():
                          add_ons=add_ons,
                          fees=fees,
                          discounts=discounts)
-
-@app.route('/pricing/calculator')
-def pricing_calculator():
-    """Family-facing pricing calculator"""
-    core_plans = CorePlan.query.filter_by(is_active=True).order_by(CorePlan.base_price).all()
-    add_ons = AddOn.query.filter_by(is_active=True).order_by(AddOn.name).all()
-    fees = OneTimeFee.query.filter_by(is_active=True).order_by(OneTimeFee.fee_type).all()
-    discounts = Discount.query.filter_by(is_active=True).order_by(Discount.name).all()
-    age_groups = AgeGroup.query.all()
-
-    return render_template('pricing_calculator.html',
-                         core_plans=core_plans,
-                         add_ons=add_ons,
-                         fees=fees,
-                         discounts=discounts,
-                         age_groups=age_groups)
 
 # Core Plan Routes
 @app.route('/pricing/core-plan/add', methods=['POST'])
@@ -1526,78 +1500,6 @@ def edit_discount(id):
     return redirect(url_for('manage_pricing'))
 
 # Package Routes
-@app.route('/packages')
-def manage_packages():
-    packages = EnrollmentPackage.query.all()
-    age_groups = AgeGroup.query.all()
-    return render_template('packages.html', packages=packages, age_groups=age_groups)
-
-@app.route('/packages/add', methods=['POST'])
-def add_package():
-    data = request.form
-    package = EnrollmentPackage(
-        name=data['name'],
-        short_code=data.get('short_code', ''),
-        description=data.get('description', ''),
-        age_group_id=int(data['age_group_id']) if data.get('age_group_id') else None,
-        core_plan_id=int(data['core_plan_id']),
-        extended_care_start_time=data.get('extended_care_start_time'),
-        extended_care_end_time=data.get('extended_care_end_time'),
-        monthly_tuition=float(data['monthly_tuition']),
-        is_active=data.get('is_active') == 'on'
-    )
-    db.session.add(package)
-    db.session.flush()  # Get the package ID
-
-    # Add selected add-ons
-    import json
-    if data.get('addons_json'):
-        addons = json.loads(data['addons_json'])
-        for addon_data in addons:
-            package_addon = PackageAddOn(
-                package_id=package.id,
-                addon_id=int(addon_data['id']),
-                quantity=int(addon_data['quantity'])
-            )
-            db.session.add(package_addon)
-
-    # Add selected fees
-    if data.get('fees_json'):
-        fees = json.loads(data['fees_json'])
-        for fee_id in fees:
-            package_fee = PackageFee(
-                package_id=package.id,
-                fee_id=int(fee_id)
-            )
-            db.session.add(package_fee)
-
-    # Add selected discounts
-    if data.get('discounts_json'):
-        discounts = json.loads(data['discounts_json'])
-        for discount_id in discounts:
-            package_discount = PackageDiscount(
-                package_id=package.id,
-                discount_id=int(discount_id)
-            )
-            db.session.add(package_discount)
-
-    db.session.commit()
-    return redirect(url_for('manage_packages'))
-
-@app.route('/packages/delete/<int:id>', methods=['POST'])
-def delete_package(id):
-    package = EnrollmentPackage.query.get_or_404(id)
-    db.session.delete(package)
-    db.session.commit()
-    return redirect(url_for('manage_packages'))
-
-@app.route('/packages/toggle/<int:id>', methods=['POST'])
-def toggle_package(id):
-    package = EnrollmentPackage.query.get_or_404(id)
-    package.is_active = not package.is_active
-    db.session.commit()
-    return redirect(url_for('manage_packages'))
-
 # Enrollment Routes
 @app.route('/enrollment')
 def manage_enrollment():
