@@ -2203,6 +2203,250 @@ def calculate_expenses():
     })
 
 
+# ==================== PROJECTIONS ====================
+
+def calculate_revenue_by_plan(settings):
+    """
+    Calculate monthly revenue based on enrollment distribution and plan prices.
+    Returns detailed breakdown by plan combination.
+    """
+    plans = CorePlan.query.filter_by(is_active=True, is_fixed_plan=True).all()
+    plan_lookup = {}
+    for plan in plans:
+        key = (plan.schedule_type, plan.day_pattern, plan.age_group_type)
+        plan_lookup[key] = plan
+
+    age_ratios = {'infant': settings.infant_percent / 100, 'child': settings.child_percent / 100}
+    schedule_ratios = {'core': settings.core_percent / 100, 'extended': settings.extended_percent / 100}
+    days_ratios = {'full': settings.full_percent / 100, 'mwf': settings.mwf_percent / 100, 'tth': settings.tth_percent / 100}
+
+    revenue_breakdown = []
+    total_revenue = 0.0
+
+    for schedule_type in ['core', 'extended']:
+        for day_pattern in ['full', 'mwf', 'tth']:
+            for age_group_type in ['infant', 'child']:
+                raw_count = (
+                    settings.total_children *
+                    age_ratios.get(age_group_type, 0) *
+                    schedule_ratios.get(schedule_type, 0) *
+                    days_ratios.get(day_pattern, 0)
+                )
+                child_count = round(raw_count)
+
+                key = (schedule_type, day_pattern, age_group_type)
+                plan = plan_lookup.get(key)
+                price = plan.base_price if plan else 0
+
+                line_revenue = child_count * price
+                total_revenue += line_revenue
+
+                if child_count > 0:
+                    revenue_breakdown.append({
+                        'schedule_type': schedule_type,
+                        'day_pattern': day_pattern,
+                        'age_group_type': age_group_type,
+                        'plan_name': plan.name if plan else 'Unknown',
+                        'children': child_count,
+                        'price': price,
+                        'revenue': round(line_revenue, 2)
+                    })
+
+    return round(total_revenue, 2), revenue_breakdown
+
+
+def calculate_projections():
+    """
+    Calculate comprehensive financial projections.
+    Returns P&L, break-even, and key metrics.
+    """
+    import math
+    settings = CapacitySettings.get_or_create()
+
+    # Revenue calculation
+    monthly_revenue, revenue_breakdown = calculate_revenue_by_plan(settings)
+
+    # Expense calculations
+    fixed_expenses = FixedExpense.query.filter_by(is_active=True).all()
+    total_fixed = sum(e.monthly_amount for e in fixed_expenses)
+    fixed_by_category = {}
+    for e in fixed_expenses:
+        cat = EXPENSE_CATEGORIES.get(e.category, e.category)
+        fixed_by_category[cat] = fixed_by_category.get(cat, 0) + e.monthly_amount
+
+    per_child_costs = PerChildCost.query.filter_by(is_active=True).all()
+    total_variable, variable_breakdown = calculate_per_child_expenses(settings, per_child_costs)
+
+    # Labor costs
+    age_mix = settings.get_age_mix()
+    schedule_mix = settings.get_schedule_mix()
+    days_mix = settings.get_days_mix()
+    capacity_data = calculate_capacity_plan(age_mix, schedule_mix, days_mix, settings.total_children)
+    labor_monthly = capacity_data.get('labor_costs', {}).get('costs', {}).get('monthly', 0)
+
+    # Total expenses
+    total_expenses = labor_monthly + total_fixed + total_variable
+
+    # Profit calculations
+    monthly_profit = monthly_revenue - total_expenses
+    annual_revenue = monthly_revenue * 12
+    annual_expenses = total_expenses * 12
+    annual_profit = monthly_profit * 12
+
+    # Margin calculations
+    profit_margin_pct = (monthly_profit / monthly_revenue * 100) if monthly_revenue > 0 else 0
+    labor_pct_of_revenue = (labor_monthly / monthly_revenue * 100) if monthly_revenue > 0 else 0
+
+    # Revenue per child
+    revenue_per_child = monthly_revenue / settings.total_children if settings.total_children > 0 else 0
+    cost_per_child = total_expenses / settings.total_children if settings.total_children > 0 else 0
+
+    # Break-even calculation
+    # Fixed costs that don't scale with enrollment: fixed expenses
+    # Variable costs that scale: labor + per-child costs
+    if settings.total_children > 0:
+        variable_cost_per_child = (labor_monthly + total_variable) / settings.total_children
+    else:
+        variable_cost_per_child = 0
+
+    if revenue_per_child > variable_cost_per_child:
+        break_even_children = math.ceil(total_fixed / (revenue_per_child - variable_cost_per_child))
+    else:
+        break_even_children = 0  # Cannot break even
+
+    # Capacity utilization (assuming 100 is max licensed capacity, can be adjusted)
+    max_capacity = 100
+    utilization_pct = (settings.total_children / max_capacity * 100) if max_capacity > 0 else 0
+
+    return {
+        'summary': {
+            'monthly_revenue': round(monthly_revenue, 2),
+            'monthly_expenses': round(total_expenses, 2),
+            'monthly_profit': round(monthly_profit, 2),
+            'annual_revenue': round(annual_revenue, 2),
+            'annual_expenses': round(annual_expenses, 2),
+            'annual_profit': round(annual_profit, 2),
+            'profit_margin_pct': round(profit_margin_pct, 1),
+            'is_profitable': monthly_profit > 0
+        },
+        'revenue': {
+            'total': round(monthly_revenue, 2),
+            'breakdown': revenue_breakdown,
+            'per_child': round(revenue_per_child, 2)
+        },
+        'expenses': {
+            'labor': round(labor_monthly, 2),
+            'fixed': round(total_fixed, 2),
+            'variable': round(total_variable, 2),
+            'total': round(total_expenses, 2),
+            'fixed_by_category': {k: round(v, 2) for k, v in fixed_by_category.items()},
+            'variable_breakdown': variable_breakdown,
+            'per_child': round(cost_per_child, 2)
+        },
+        'metrics': {
+            'labor_pct_of_revenue': round(labor_pct_of_revenue, 1),
+            'revenue_per_child': round(revenue_per_child, 2),
+            'cost_per_child': round(cost_per_child, 2),
+            'break_even_children': break_even_children,
+            'current_enrollment': settings.total_children,
+            'utilization_pct': round(utilization_pct, 1),
+            'margin_above_break_even': settings.total_children - break_even_children
+        },
+        'enrollment': {
+            'total': settings.total_children,
+            'infant_pct': settings.infant_percent,
+            'child_pct': settings.child_percent,
+            'core_pct': settings.core_percent,
+            'extended_pct': settings.extended_percent
+        }
+    }
+
+
+def calculate_sensitivity(base_projections, variable, change_pct):
+    """
+    Calculate how profit changes with a given variable change.
+    variable: 'enrollment', 'price', 'labor', 'fixed_expenses'
+    change_pct: percentage change (e.g., 10 for +10%, -20 for -20%)
+    """
+    settings = CapacitySettings.get_or_create()
+    multiplier = 1 + (change_pct / 100)
+
+    if variable == 'enrollment':
+        # More children = more revenue, more variable costs
+        new_revenue = base_projections['revenue']['total'] * multiplier
+        new_variable = base_projections['expenses']['variable'] * multiplier
+        # Labor scales somewhat with enrollment (simplified)
+        new_labor = base_projections['expenses']['labor'] * multiplier
+        new_expenses = new_labor + base_projections['expenses']['fixed'] + new_variable
+    elif variable == 'price':
+        # Price change only affects revenue
+        new_revenue = base_projections['revenue']['total'] * multiplier
+        new_expenses = base_projections['expenses']['total']
+    elif variable == 'labor':
+        # Labor cost change only affects expenses
+        new_revenue = base_projections['revenue']['total']
+        new_labor = base_projections['expenses']['labor'] * multiplier
+        new_expenses = new_labor + base_projections['expenses']['fixed'] + base_projections['expenses']['variable']
+    elif variable == 'fixed_expenses':
+        # Fixed expense change
+        new_revenue = base_projections['revenue']['total']
+        new_fixed = base_projections['expenses']['fixed'] * multiplier
+        new_expenses = base_projections['expenses']['labor'] + new_fixed + base_projections['expenses']['variable']
+    else:
+        return None
+
+    new_profit = new_revenue - new_expenses
+    profit_change = new_profit - base_projections['summary']['monthly_profit']
+
+    return {
+        'variable': variable,
+        'change_pct': change_pct,
+        'new_revenue': round(new_revenue, 2),
+        'new_expenses': round(new_expenses, 2),
+        'new_profit': round(new_profit, 2),
+        'profit_change': round(profit_change, 2),
+        'is_profitable': new_profit > 0
+    }
+
+
+@app.route('/projections')
+def projections():
+    """Financial projections and analysis page"""
+    settings = CapacitySettings.get_or_create()
+    return render_template('projections.html', settings=settings)
+
+
+@app.route('/projections/data')
+def projections_data():
+    """JSON endpoint for projections data"""
+    projections = calculate_projections()
+    return jsonify(projections)
+
+
+@app.route('/projections/sensitivity')
+def projections_sensitivity():
+    """JSON endpoint for sensitivity analysis"""
+    base = calculate_projections()
+
+    # Calculate sensitivity for different scenarios
+    scenarios = []
+    for variable in ['enrollment', 'price', 'labor', 'fixed_expenses']:
+        var_scenarios = []
+        for change in [-20, -10, 0, 10, 20]:
+            result = calculate_sensitivity(base, variable, change)
+            if result:
+                var_scenarios.append(result)
+        scenarios.append({
+            'variable': variable,
+            'scenarios': var_scenarios
+        })
+
+    return jsonify({
+        'base': base,
+        'sensitivity': scenarios
+    })
+
+
 @app.route('/initialize-db')
 def initialize_db():
     """Initialize database with sample data"""

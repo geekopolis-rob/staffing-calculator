@@ -1,0 +1,432 @@
+{% extends "base.html" %}
+
+{% block title %}Financial Projections{% endblock %}
+
+{% block content %}
+<h2 class="mb-4"><i class="bi bi-graph-up-arrow"></i> Financial Projections</h2>
+
+<!-- Row 1: Summary KPI Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <i class="bi bi-cash-coin text-success" style="font-size: 2rem;"></i>
+                <h3 class="mt-2 mb-0" id="monthlyRevenue">$0</h3>
+                <p class="text-muted mb-0">Monthly Revenue</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <i class="bi bi-credit-card text-danger" style="font-size: 2rem;"></i>
+                <h3 class="mt-2 mb-0" id="monthlyExpenses">$0</h3>
+                <p class="text-muted mb-0">Monthly Expenses</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center h-100" id="profitCard">
+            <div class="card-body">
+                <i class="bi bi-piggy-bank" style="font-size: 2rem;"></i>
+                <h3 class="mt-2 mb-0" id="monthlyProfit">$0</h3>
+                <p class="text-muted mb-0">Monthly Profit</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center h-100">
+            <div class="card-body">
+                <i class="bi bi-percent text-primary" style="font-size: 2rem;"></i>
+                <h3 class="mt-2 mb-0" id="profitMargin">0%</h3>
+                <p class="text-muted mb-0">Profit Margin</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row 2: P&L and Key Metrics -->
+<div class="row">
+    <!-- Left Column: Monthly P&L -->
+    <div class="col-lg-6">
+        <div class="card mb-4 border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="bi bi-file-earmark-spreadsheet"></i> Monthly Profit & Loss</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr class="table-light">
+                            <td colspan="2"><strong>REVENUE</strong></td>
+                        </tr>
+                        <tr>
+                            <td class="ps-4">Tuition Revenue</td>
+                            <td class="text-end" id="tuitionRevenue">$0</td>
+                        </tr>
+                        <tr class="table-success">
+                            <td><strong>Total Revenue</strong></td>
+                            <td class="text-end"><strong id="totalRevenue">$0</strong></td>
+                        </tr>
+                        <tr><td colspan="2">&nbsp;</td></tr>
+                        <tr class="table-light">
+                            <td colspan="2"><strong>EXPENSES</strong></td>
+                        </tr>
+                        <tr>
+                            <td class="ps-4">Labor Costs</td>
+                            <td class="text-end" id="laborCost">$0</td>
+                        </tr>
+                        <tr>
+                            <td class="ps-4">Fixed Expenses</td>
+                            <td class="text-end" id="fixedExpenses">$0</td>
+                        </tr>
+                        <tr>
+                            <td class="ps-4">Variable Expenses</td>
+                            <td class="text-end" id="variableExpenses">$0</td>
+                        </tr>
+                        <tr class="table-danger">
+                            <td><strong>Total Expenses</strong></td>
+                            <td class="text-end"><strong id="totalExpenses">$0</strong></td>
+                        </tr>
+                        <tr><td colspan="2">&nbsp;</td></tr>
+                        <tr id="netIncomeRow" class="table-primary">
+                            <td><strong>NET INCOME</strong></td>
+                            <td class="text-end"><strong id="netIncome">$0</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Annual Projections -->
+        <div class="card mb-4 border-info">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="bi bi-calendar-range"></i> Annual Projections</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-4">
+                        <div class="border rounded p-3">
+                            <h5 class="mb-0 text-success" id="annualRevenue">$0</h5>
+                            <small class="text-muted">Revenue</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="border rounded p-3">
+                            <h5 class="mb-0 text-danger" id="annualExpenses">$0</h5>
+                            <small class="text-muted">Expenses</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="border rounded p-3" id="annualProfitBox">
+                            <h5 class="mb-0" id="annualProfit">$0</h5>
+                            <small class="text-muted">Profit</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Key Metrics & Break-even -->
+    <div class="col-lg-6">
+        <!-- Key Metrics -->
+        <div class="card mb-4 border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-speedometer"></i> Key Metrics</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <div class="border rounded p-3 text-center">
+                            <h4 class="mb-0" id="revenuePerChild">$0</h4>
+                            <small class="text-muted">Revenue/Child</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="border rounded p-3 text-center">
+                            <h4 class="mb-0" id="costPerChild">$0</h4>
+                            <small class="text-muted">Cost/Child</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center py-2 border-top">
+                    <span class="text-muted">Labor % of Revenue</span>
+                    <span class="fw-bold" id="laborPctRevenue">0%</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center py-2 border-top">
+                    <span class="text-muted">Target: 50-60%</span>
+                    <span id="laborPctStatus" class="badge">-</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center py-2 border-top">
+                    <span class="text-muted">Current Enrollment</span>
+                    <span class="fw-bold" id="currentEnrollment">0</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center py-2 border-top">
+                    <span class="text-muted">Capacity Utilization</span>
+                    <span class="fw-bold" id="utilizationPct">0%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Break-even Analysis -->
+        <div class="card mb-4 border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="bi bi-bullseye"></i> Break-even Analysis</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-3">
+                    <h2 class="mb-0" id="breakEvenChildren">0</h2>
+                    <p class="text-muted mb-0">Children Needed to Break Even</p>
+                </div>
+
+                <div class="progress mb-3" style="height: 30px;">
+                    <div class="progress-bar bg-warning" id="breakEvenProgress" style="width: 0%;">
+                        <span id="breakEvenProgressText">0 / 0</span>
+                    </div>
+                </div>
+
+                <div class="alert mb-0" id="breakEvenAlert">
+                    <i class="bi bi-hourglass"></i> Loading...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row 3: Sensitivity Analysis -->
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4 border-secondary">
+            <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-sliders2"></i> Sensitivity Analysis</h5>
+                <small>Impact on monthly profit at different scenarios</small>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered text-center mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Variable</th>
+                                <th>-20%</th>
+                                <th>-10%</th>
+                                <th>Base</th>
+                                <th>+10%</th>
+                                <th>+20%</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sensitivityTable">
+                            <tr><td colspan="6" class="text-muted">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle"></i>
+                        Shows how changes in key variables affect your monthly profit.
+                        <span class="text-success">Green</span> = profitable,
+                        <span class="text-danger">Red</span> = loss.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row 4: Revenue Breakdown -->
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Revenue by Plan</h5>
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#revenueBreakdown">
+                    <i class="bi bi-chevron-down"></i> Details
+                </button>
+            </div>
+            <div class="collapse" id="revenueBreakdown">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Plan</th>
+                                    <th class="text-center">Children</th>
+                                    <th class="text-end">Price</th>
+                                    <th class="text-end">Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody id="revenueTable">
+                                <tr><td colspan="4" class="text-muted text-center">Loading...</td></tr>
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr>
+                                    <th>Total</th>
+                                    <th class="text-center" id="totalChildren">0</th>
+                                    <th></th>
+                                    <th class="text-end" id="totalRevenueFooter">$0</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Fetch projections data
+    fetch('/projections/data')
+        .then(response => response.json())
+        .then(data => {
+            // KPI Cards
+            document.getElementById('monthlyRevenue').textContent = '$' + data.summary.monthly_revenue.toLocaleString();
+            document.getElementById('monthlyExpenses').textContent = '$' + data.summary.monthly_expenses.toLocaleString();
+            document.getElementById('monthlyProfit').textContent = '$' + data.summary.monthly_profit.toLocaleString();
+            document.getElementById('profitMargin').textContent = data.summary.profit_margin_pct + '%';
+
+            // Color the profit card based on profitability
+            const profitCard = document.getElementById('profitCard');
+            const profitIcon = profitCard.querySelector('i');
+            if (data.summary.is_profitable) {
+                profitIcon.classList.remove('text-danger');
+                profitIcon.classList.add('text-success');
+            } else {
+                profitIcon.classList.remove('text-success');
+                profitIcon.classList.add('text-danger');
+            }
+
+            // P&L Table
+            document.getElementById('tuitionRevenue').textContent = '$' + data.revenue.total.toLocaleString();
+            document.getElementById('totalRevenue').textContent = '$' + data.revenue.total.toLocaleString();
+            document.getElementById('laborCost').textContent = '$' + data.expenses.labor.toLocaleString();
+            document.getElementById('fixedExpenses').textContent = '$' + data.expenses.fixed.toLocaleString();
+            document.getElementById('variableExpenses').textContent = '$' + data.expenses.variable.toLocaleString();
+            document.getElementById('totalExpenses').textContent = '$' + data.expenses.total.toLocaleString();
+            document.getElementById('netIncome').textContent = '$' + data.summary.monthly_profit.toLocaleString();
+
+            // Color the net income row
+            const netIncomeRow = document.getElementById('netIncomeRow');
+            if (data.summary.is_profitable) {
+                netIncomeRow.classList.remove('table-danger');
+                netIncomeRow.classList.add('table-success');
+            } else {
+                netIncomeRow.classList.remove('table-success');
+                netIncomeRow.classList.add('table-danger');
+            }
+
+            // Annual projections
+            document.getElementById('annualRevenue').textContent = '$' + data.summary.annual_revenue.toLocaleString();
+            document.getElementById('annualExpenses').textContent = '$' + data.summary.annual_expenses.toLocaleString();
+            document.getElementById('annualProfit').textContent = '$' + data.summary.annual_profit.toLocaleString();
+
+            const annualProfitBox = document.getElementById('annualProfitBox');
+            const annualProfitText = document.getElementById('annualProfit');
+            if (data.summary.annual_profit >= 0) {
+                annualProfitText.classList.add('text-success');
+                annualProfitText.classList.remove('text-danger');
+            } else {
+                annualProfitText.classList.add('text-danger');
+                annualProfitText.classList.remove('text-success');
+            }
+
+            // Key Metrics
+            document.getElementById('revenuePerChild').textContent = '$' + data.metrics.revenue_per_child.toLocaleString();
+            document.getElementById('costPerChild').textContent = '$' + data.metrics.cost_per_child.toLocaleString();
+            document.getElementById('laborPctRevenue').textContent = data.metrics.labor_pct_of_revenue + '%';
+            document.getElementById('currentEnrollment').textContent = data.metrics.current_enrollment;
+            document.getElementById('utilizationPct').textContent = data.metrics.utilization_pct + '%';
+
+            // Labor % status badge
+            const laborPctStatus = document.getElementById('laborPctStatus');
+            const laborPct = data.metrics.labor_pct_of_revenue;
+            if (laborPct >= 50 && laborPct <= 60) {
+                laborPctStatus.className = 'badge bg-success';
+                laborPctStatus.textContent = 'On Target';
+            } else if (laborPct < 50) {
+                laborPctStatus.className = 'badge bg-info';
+                laborPctStatus.textContent = 'Below Target';
+            } else {
+                laborPctStatus.className = 'badge bg-warning text-dark';
+                laborPctStatus.textContent = 'Above Target';
+            }
+
+            // Break-even analysis
+            const breakEven = data.metrics.break_even_children;
+            const current = data.metrics.current_enrollment;
+            document.getElementById('breakEvenChildren').textContent = breakEven;
+
+            const progressPct = breakEven > 0 ? Math.min((current / breakEven) * 100, 100) : 100;
+            const progressBar = document.getElementById('breakEvenProgress');
+            progressBar.style.width = progressPct + '%';
+            document.getElementById('breakEvenProgressText').textContent = current + ' / ' + breakEven;
+
+            const breakEvenAlert = document.getElementById('breakEvenAlert');
+            const margin = data.metrics.margin_above_break_even;
+            if (margin > 0) {
+                breakEvenAlert.className = 'alert alert-success mb-0';
+                breakEvenAlert.innerHTML = '<i class="bi bi-check-circle"></i> ' + margin + ' children above break-even';
+                progressBar.classList.remove('bg-warning', 'bg-danger');
+                progressBar.classList.add('bg-success');
+            } else if (margin === 0) {
+                breakEvenAlert.className = 'alert alert-warning mb-0';
+                breakEvenAlert.innerHTML = '<i class="bi bi-exclamation-triangle"></i> At break-even point';
+            } else {
+                breakEvenAlert.className = 'alert alert-danger mb-0';
+                breakEvenAlert.innerHTML = '<i class="bi bi-x-circle"></i> ' + Math.abs(margin) + ' children below break-even';
+                progressBar.classList.remove('bg-warning', 'bg-success');
+                progressBar.classList.add('bg-danger');
+            }
+
+            // Revenue breakdown table
+            const revenueTable = document.getElementById('revenueTable');
+            if (data.revenue.breakdown && data.revenue.breakdown.length > 0) {
+                revenueTable.innerHTML = data.revenue.breakdown.map(item => `
+                    <tr>
+                        <td>${item.plan_name}</td>
+                        <td class="text-center">${item.children}</td>
+                        <td class="text-end">$${item.price.toLocaleString()}</td>
+                        <td class="text-end">$${item.revenue.toLocaleString()}</td>
+                    </tr>
+                `).join('');
+                document.getElementById('totalChildren').textContent = data.metrics.current_enrollment;
+                document.getElementById('totalRevenueFooter').textContent = '$' + data.revenue.total.toLocaleString();
+            } else {
+                revenueTable.innerHTML = '<tr><td colspan="4" class="text-muted text-center">No enrollment data</td></tr>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading projections:', error);
+        });
+
+    // Fetch sensitivity data
+    fetch('/projections/sensitivity')
+        .then(response => response.json())
+        .then(data => {
+            const sensitivityTable = document.getElementById('sensitivityTable');
+            const variableNames = {
+                'enrollment': 'Enrollment',
+                'price': 'Prices',
+                'labor': 'Labor Costs',
+                'fixed_expenses': 'Fixed Expenses'
+            };
+
+            sensitivityTable.innerHTML = data.sensitivity.map(row => {
+                const cells = row.scenarios.map(s => {
+                    const color = s.is_profitable ? 'text-success' : 'text-danger';
+                    const sign = s.profit_change >= 0 ? '+' : '';
+                    return `<td class="${color}">$${s.new_profit.toLocaleString()}<br><small>(${sign}$${s.profit_change.toLocaleString()})</small></td>`;
+                }).join('');
+                return `<tr><th class="text-start">${variableNames[row.variable] || row.variable}</th>${cells}</tr>`;
+            }).join('');
+        })
+        .catch(error => {
+            console.error('Error loading sensitivity:', error);
+            document.getElementById('sensitivityTable').innerHTML = '<tr><td colspan="6" class="text-danger">Error loading data</td></tr>';
+        });
+});
+</script>
+{% endblock %}
