@@ -2637,7 +2637,9 @@ def initialize_db():
 
     return f"Database initialized. Created {len(created_plans)} fixed plans."
 
+# Initialize database when module is imported (for gunicorn/production)
+with app.app_context():
+    initialize_db()
+
 if __name__ == '__main__':
-    with app.app_context():
-        initialize_db()
     app.run(host='0.0.0.0', port=5000, debug=True)
