@@ -2,6 +2,41 @@
 
 {% block title %}Enrollment Planning{% endblock %}
 
+{% block styles %}
+<style>
+    .progress-slider {
+        position: relative;
+        cursor: pointer;
+    }
+    .progress-divider {
+        position: absolute;
+        width: 18px;
+        height: 100%;
+        background: rgba(255,255,255,0.9);
+        border: 2px solid #333;
+        border-radius: 3px;
+        cursor: ew-resize;
+        transform: translateX(-50%);
+        z-index: 10;
+        top: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .progress-divider::before {
+        content: "|||";
+        font-size: 8px;
+        color: #666;
+        letter-spacing: -1px;
+    }
+    .progress-divider:hover,
+    .progress-divider.dragging {
+        background: white;
+        box-shadow: 0 0 5px rgba(0,0,0,0.3);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-lg-6">
@@ -43,9 +78,10 @@
                             </div>
                         </div>
                     </div>
-                    <div class="progress" style="height: 20px;">
+                    <div class="progress progress-slider" id="ageSlider" style="height: 20px;">
                         <div class="progress-bar bg-warning" id="infantBar" style="width: {{ settings.infant_percent }}%">{{ settings.infant_percent|int }}%</div>
                         <div class="progress-bar bg-success" id="childBar" style="width: {{ settings.child_percent }}%">{{ settings.child_percent|int }}%</div>
+                        <div class="progress-divider" id="ageDivider" style="left: {{ settings.infant_percent }}%"></div>
                     </div>
                     <small class="text-muted" id="ageValidation">Total: 100%</small>
                 </div>
@@ -69,9 +105,10 @@
                             </div>
                         </div>
                     </div>
-                    <div class="progress" style="height: 20px;">
+                    <div class="progress progress-slider" id="scheduleSlider" style="height: 20px;">
                         <div class="progress-bar bg-info" id="coreBar" style="width: {{ settings.core_percent }}%">{{ settings.core_percent|int }}%</div>
                         <div class="progress-bar bg-primary" id="extendedBar" style="width: {{ settings.extended_percent }}%">{{ settings.extended_percent|int }}%</div>
+                        <div class="progress-divider" id="scheduleDivider" style="left: {{ settings.core_percent }}%"></div>
                     </div>
                     <small class="text-muted" id="scheduleValidation">Total: 100%</small>
                 </div>
@@ -102,10 +139,12 @@
                             </div>
                         </div>
                     </div>
-                    <div class="progress" style="height: 20px;">
+                    <div class="progress progress-slider" id="daysSlider" style="height: 20px;">
                         <div class="progress-bar bg-secondary" id="fullBar" style="width: {{ settings.full_percent }}%">{{ settings.full_percent|int }}%</div>
                         <div class="progress-bar bg-dark" id="mwfBar" style="width: {{ settings.mwf_percent }}%">{{ settings.mwf_percent|int }}%</div>
                         <div class="progress-bar" id="tthBar" style="width: {{ settings.tth_percent }}%; background-color: #6c757d;">{{ settings.tth_percent|int }}%</div>
+                        <div class="progress-divider" id="daysDivider1" style="left: {{ settings.full_percent }}%"></div>
+                        <div class="progress-divider" id="daysDivider2" style="left: {{ settings.full_percent + settings.mwf_percent }}%"></div>
                     </div>
                     <small class="text-muted" id="daysValidation">Total: 100%</small>
                 </div>
@@ -123,6 +162,16 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Snap value to nearest 5%
+    function snapTo5(value) {
+        return Math.round(value / 5) * 5;
+    }
+
+    // Clamp value between min and max
+    function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
     // Update progress bars on input change
     function updateAgeBars() {
         const infant = parseInt(document.getElementById('infantPercent').value) || 0;
@@ -133,6 +182,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('infantBar').textContent = infant + '%';
         document.getElementById('childBar').style.width = child + '%';
         document.getElementById('childBar').textContent = child + '%';
+        document.getElementById('ageDivider').style.left = infant + '%';
 
         const validation = document.getElementById('ageValidation');
         if (total === 100) {
@@ -155,6 +205,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('coreBar').textContent = core + '%';
         document.getElementById('extendedBar').style.width = extended + '%';
         document.getElementById('extendedBar').textContent = extended + '%';
+        document.getElementById('scheduleDivider').style.left = core + '%';
 
         const validation = document.getElementById('scheduleValidation');
         if (total === 100) {
@@ -180,6 +231,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('mwfBar').textContent = mwf + '%';
         document.getElementById('tthBar').style.width = tth + '%';
         document.getElementById('tthBar').textContent = tth + '%';
+        document.getElementById('daysDivider1').style.left = full + '%';
+        document.getElementById('daysDivider2').style.left = (full + mwf) + '%';
 
         const validation = document.getElementById('daysValidation');
         if (total === 100) {
@@ -193,7 +246,168 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Attach event listeners
+    // Snap on blur for input fields
+    function setupSnapOnBlur(inputId, complementId, updateFn) {
+        const input = document.getElementById(inputId);
+        input.addEventListener('blur', function() {
+            let value = parseInt(this.value) || 0;
+            value = clamp(snapTo5(value), 0, 100);
+            this.value = value;
+            // Update complement to maintain 100%
+            document.getElementById(complementId).value = 100 - value;
+            updateFn();
+        });
+    }
+
+    function setupSnapOnBlur3(inputId, input2Id, input3Id, updateFn) {
+        const input = document.getElementById(inputId);
+        input.addEventListener('blur', function() {
+            let value = parseInt(this.value) || 0;
+            value = clamp(snapTo5(value), 0, 100);
+            this.value = value;
+            // Adjust the other two to maintain 100% (proportionally if possible)
+            const other1 = parseInt(document.getElementById(input2Id).value) || 0;
+            const other2 = parseInt(document.getElementById(input3Id).value) || 0;
+            const remaining = 100 - value;
+            if (other1 + other2 > 0) {
+                const ratio = remaining / (other1 + other2);
+                document.getElementById(input2Id).value = snapTo5(Math.round(other1 * ratio));
+                document.getElementById(input3Id).value = 100 - value - parseInt(document.getElementById(input2Id).value);
+            } else {
+                document.getElementById(input2Id).value = remaining;
+                document.getElementById(input3Id).value = 0;
+            }
+            updateFn();
+        });
+    }
+
+    // Setup snap on blur for 2-value groups
+    setupSnapOnBlur('infantPercent', 'childPercent', updateAgeBars);
+    setupSnapOnBlur('childPercent', 'infantPercent', updateAgeBars);
+    setupSnapOnBlur('corePercent', 'extendedPercent', updateScheduleBars);
+    setupSnapOnBlur('extendedPercent', 'corePercent', updateScheduleBars);
+
+    // Setup snap on blur for 3-value group
+    setupSnapOnBlur3('fullPercent', 'mwfPercent', 'tthPercent', updateDaysBars);
+    setupSnapOnBlur3('mwfPercent', 'fullPercent', 'tthPercent', updateDaysBars);
+    setupSnapOnBlur3('tthPercent', 'fullPercent', 'mwfPercent', updateDaysBars);
+
+    // Dragging functionality for 2-segment sliders
+    function setupDrag2(sliderId, dividerId, input1Id, input2Id, updateFn) {
+        const slider = document.getElementById(sliderId);
+        const divider = document.getElementById(dividerId);
+        let isDragging = false;
+
+        function getPercentFromEvent(e) {
+            const rect = slider.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const x = clientX - rect.left;
+            const percent = (x / rect.width) * 100;
+            return clamp(snapTo5(percent), 0, 100);
+        }
+
+        function onDragStart(e) {
+            isDragging = true;
+            divider.classList.add('dragging');
+            e.preventDefault();
+        }
+
+        function onDragMove(e) {
+            if (!isDragging) return;
+            const percent = getPercentFromEvent(e);
+            document.getElementById(input1Id).value = percent;
+            document.getElementById(input2Id).value = 100 - percent;
+            updateFn();
+        }
+
+        function onDragEnd() {
+            isDragging = false;
+            divider.classList.remove('dragging');
+        }
+
+        divider.addEventListener('mousedown', onDragStart);
+        divider.addEventListener('touchstart', onDragStart);
+        document.addEventListener('mousemove', onDragMove);
+        document.addEventListener('touchmove', onDragMove);
+        document.addEventListener('mouseup', onDragEnd);
+        document.addEventListener('touchend', onDragEnd);
+
+        // Also allow clicking anywhere on the slider
+        slider.addEventListener('click', function(e) {
+            if (e.target === divider) return;
+            const percent = getPercentFromEvent(e);
+            document.getElementById(input1Id).value = percent;
+            document.getElementById(input2Id).value = 100 - percent;
+            updateFn();
+        });
+    }
+
+    // Dragging functionality for 3-segment slider
+    function setupDrag3(sliderId, divider1Id, divider2Id, input1Id, input2Id, input3Id, updateFn) {
+        const slider = document.getElementById(sliderId);
+        const divider1 = document.getElementById(divider1Id);
+        const divider2 = document.getElementById(divider2Id);
+        let activeDivider = null;
+
+        function getPercentFromEvent(e) {
+            const rect = slider.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const x = clientX - rect.left;
+            return (x / rect.width) * 100;
+        }
+
+        function onDragStart(e, divider) {
+            activeDivider = divider;
+            divider.classList.add('dragging');
+            e.preventDefault();
+        }
+
+        function onDragMove(e) {
+            if (!activeDivider) return;
+            const rawPercent = getPercentFromEvent(e);
+            const full = parseInt(document.getElementById(input1Id).value) || 0;
+            const mwf = parseInt(document.getElementById(input2Id).value) || 0;
+
+            if (activeDivider === divider1) {
+                // Moving first divider: adjusts full and mwf
+                const newFull = clamp(snapTo5(rawPercent), 0, 100 - parseInt(document.getElementById(input3Id).value));
+                const oldBoundary = full + mwf;
+                document.getElementById(input1Id).value = newFull;
+                document.getElementById(input2Id).value = Math.max(0, oldBoundary - newFull);
+                // tth stays the same, but recalculate to ensure 100%
+                document.getElementById(input3Id).value = 100 - newFull - parseInt(document.getElementById(input2Id).value);
+            } else {
+                // Moving second divider: adjusts mwf and tth
+                const boundary = clamp(snapTo5(rawPercent), full, 100);
+                document.getElementById(input2Id).value = boundary - full;
+                document.getElementById(input3Id).value = 100 - boundary;
+            }
+            updateFn();
+        }
+
+        function onDragEnd() {
+            if (activeDivider) {
+                activeDivider.classList.remove('dragging');
+            }
+            activeDivider = null;
+        }
+
+        divider1.addEventListener('mousedown', (e) => onDragStart(e, divider1));
+        divider1.addEventListener('touchstart', (e) => onDragStart(e, divider1));
+        divider2.addEventListener('mousedown', (e) => onDragStart(e, divider2));
+        divider2.addEventListener('touchstart', (e) => onDragStart(e, divider2));
+        document.addEventListener('mousemove', onDragMove);
+        document.addEventListener('touchmove', onDragMove);
+        document.addEventListener('mouseup', onDragEnd);
+        document.addEventListener('touchend', onDragEnd);
+    }
+
+    // Setup drag handlers
+    setupDrag2('ageSlider', 'ageDivider', 'infantPercent', 'childPercent', updateAgeBars);
+    setupDrag2('scheduleSlider', 'scheduleDivider', 'corePercent', 'extendedPercent', updateScheduleBars);
+    setupDrag3('daysSlider', 'daysDivider1', 'daysDivider2', 'fullPercent', 'mwfPercent', 'tthPercent', updateDaysBars);
+
+    // Attach event listeners for real-time bar updates while typing
     document.querySelectorAll('.age-input').forEach(input => {
         input.addEventListener('input', updateAgeBars);
     });
