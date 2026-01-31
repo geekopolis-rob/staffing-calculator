@@ -49,6 +49,34 @@ def format_time_filter(time_str):
     except:
         return time_str
 
+@app.template_filter('accounting')
+def accounting_format_filter(value):
+    """Full precision: $1,234.56 or ($1,234.56)"""
+    if value is None:
+        return '$0.00'
+    try:
+        num = float(value)
+        if num < 0:
+            return '(${:,.2f})'.format(abs(num))
+        else:
+            return '${:,.2f}'.format(num)
+    except (ValueError, TypeError):
+        return '$0.00'
+
+@app.template_filter('accounting_round')
+def accounting_round_filter(value):
+    """Rounded to dollar: $1,234 or ($1,234)"""
+    if value is None:
+        return '$0'
+    try:
+        num = float(value)
+        if num < 0:
+            return '(${:,.0f})'.format(abs(num))
+        else:
+            return '${:,.0f}'.format(num)
+    except (ValueError, TypeError):
+        return '$0'
+
 # Database Models
 class AgeGroup(db.Model):
     id = db.Column(db.Integer, primary_key=True)

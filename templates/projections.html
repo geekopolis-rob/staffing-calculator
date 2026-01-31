@@ -282,9 +282,9 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             // KPI Cards
-            document.getElementById('monthlyRevenue').textContent = '$' + data.summary.monthly_revenue.toLocaleString();
-            document.getElementById('monthlyExpenses').textContent = '$' + data.summary.monthly_expenses.toLocaleString();
-            document.getElementById('monthlyProfit').textContent = '$' + data.summary.monthly_profit.toLocaleString();
+            document.getElementById('monthlyRevenue').textContent = formatAccountingRound(data.summary.monthly_revenue);
+            document.getElementById('monthlyExpenses').textContent = formatAccountingRound(data.summary.monthly_expenses);
+            document.getElementById('monthlyProfit').textContent = formatAccountingRound(data.summary.monthly_profit);
             document.getElementById('profitMargin').textContent = data.summary.profit_margin_pct + '%';
 
             // Color the profit card based on profitability
@@ -299,13 +299,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // P&L Table
-            document.getElementById('tuitionRevenue').textContent = '$' + data.revenue.total.toLocaleString();
-            document.getElementById('totalRevenue').textContent = '$' + data.revenue.total.toLocaleString();
-            document.getElementById('laborCost').textContent = '$' + data.expenses.labor.toLocaleString();
-            document.getElementById('fixedExpenses').textContent = '$' + data.expenses.fixed.toLocaleString();
-            document.getElementById('variableExpenses').textContent = '$' + data.expenses.variable.toLocaleString();
-            document.getElementById('totalExpenses').textContent = '$' + data.expenses.total.toLocaleString();
-            document.getElementById('netIncome').textContent = '$' + data.summary.monthly_profit.toLocaleString();
+            document.getElementById('tuitionRevenue').textContent = formatAccountingRound(data.revenue.total);
+            document.getElementById('totalRevenue').textContent = formatAccountingRound(data.revenue.total);
+            document.getElementById('laborCost').textContent = formatAccountingRound(data.expenses.labor);
+            document.getElementById('fixedExpenses').textContent = formatAccountingRound(data.expenses.fixed);
+            document.getElementById('variableExpenses').textContent = formatAccountingRound(data.expenses.variable);
+            document.getElementById('totalExpenses').textContent = formatAccountingRound(data.expenses.total);
+            document.getElementById('netIncome').textContent = formatAccountingRound(data.summary.monthly_profit);
 
             // Color the net income row
             const netIncomeRow = document.getElementById('netIncomeRow');
@@ -318,9 +318,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Annual projections
-            document.getElementById('annualRevenue').textContent = '$' + data.summary.annual_revenue.toLocaleString();
-            document.getElementById('annualExpenses').textContent = '$' + data.summary.annual_expenses.toLocaleString();
-            document.getElementById('annualProfit').textContent = '$' + data.summary.annual_profit.toLocaleString();
+            document.getElementById('annualRevenue').textContent = formatAccountingRound(data.summary.annual_revenue);
+            document.getElementById('annualExpenses').textContent = formatAccountingRound(data.summary.annual_expenses);
+            document.getElementById('annualProfit').textContent = formatAccountingRound(data.summary.annual_profit);
 
             const annualProfitBox = document.getElementById('annualProfitBox');
             const annualProfitText = document.getElementById('annualProfit');
@@ -333,8 +333,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Key Metrics
-            document.getElementById('revenuePerChild').textContent = '$' + data.metrics.revenue_per_child.toLocaleString();
-            document.getElementById('costPerChild').textContent = '$' + data.metrics.cost_per_child.toLocaleString();
+            document.getElementById('revenuePerChild').textContent = formatAccountingRound(data.metrics.revenue_per_child);
+            document.getElementById('costPerChild').textContent = formatAccountingRound(data.metrics.cost_per_child);
             document.getElementById('laborPctRevenue').textContent = data.metrics.labor_pct_of_revenue + '%';
             document.getElementById('currentEnrollment').textContent = data.metrics.current_enrollment;
             document.getElementById('utilizationPct').textContent = data.metrics.utilization_pct + '%';
@@ -387,12 +387,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     <tr>
                         <td>${item.plan_name}</td>
                         <td class="text-center">${item.children}</td>
-                        <td class="text-end">$${item.price.toLocaleString()}</td>
-                        <td class="text-end">$${item.revenue.toLocaleString()}</td>
+                        <td class="text-end">${formatAccountingRound(item.price)}</td>
+                        <td class="text-end">${formatAccountingRound(item.revenue)}</td>
                     </tr>
                 `).join('');
                 document.getElementById('totalChildren').textContent = data.metrics.current_enrollment;
-                document.getElementById('totalRevenueFooter').textContent = '$' + data.revenue.total.toLocaleString();
+                document.getElementById('totalRevenueFooter').textContent = formatAccountingRound(data.revenue.total);
             } else {
                 revenueTable.innerHTML = '<tr><td colspan="4" class="text-muted text-center">No enrollment data</td></tr>';
             }
@@ -418,8 +418,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     const profitColor = s.is_profitable ? 'text-success' : 'text-danger';
                     const changeColor = s.profit_change >= 0 ? 'text-success' : 'text-danger';
                     const changeIcon = s.profit_change >= 0 ? '↑' : '↓';
-                    const sign = s.profit_change >= 0 ? '+' : '';
-                    return `<td><span class="${profitColor}">$${s.new_profit.toLocaleString()}</span><br><small class="${changeColor}">${changeIcon} ${sign}$${s.profit_change.toLocaleString()}/mo</small></td>`;
+                    const changeSign = s.profit_change >= 0 ? '+' : '';
+                    return `<td><span class="${profitColor}">${formatAccountingRound(s.new_profit)}</span><br><small class="${changeColor}">${changeIcon} ${changeSign}${formatAccountingRound(s.profit_change)}/mo</small></td>`;
                 }).join('');
                 return `<tr><th class="text-start">${variableNames[row.variable] || row.variable}</th>${cells}</tr>`;
             }).join('');

@@ -228,8 +228,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // KPI cards
             document.getElementById('totalEnrolled').textContent = data.enrollment.total_children;
             document.getElementById('staffAvailable').textContent = data.staffing.available;
-            document.getElementById('monthlyCost').textContent = '$' + data.financial.total_monthly_cost.toLocaleString();
-            document.getElementById('revenuePotential').textContent = '$' + data.financial.revenue_potential.toLocaleString();
+            document.getElementById('monthlyCost').textContent = formatAccountingRound(data.financial.total_monthly_cost);
+            document.getElementById('revenuePotential').textContent = formatAccountingRound(data.financial.revenue_potential);
 
             // Enrollment overview
             document.getElementById('peakDay').textContent = data.enrollment.peak_day;
@@ -251,15 +251,15 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('extendedBar').innerHTML = '<small>Extended ' + extendedPct + '%</small>';
 
             // Financial overview
-            document.getElementById('laborCost').textContent = '$' + data.financial.labor_cost.toLocaleString();
-            document.getElementById('fixedExpenses').textContent = '$' + data.financial.fixed_expenses.toLocaleString();
-            document.getElementById('variableExpenses').textContent = '$' + data.financial.variable_expenses.toLocaleString();
-            document.getElementById('totalCost').textContent = '$' + data.financial.total_monthly_cost.toLocaleString();
-            document.getElementById('revenueRow').textContent = '$' + data.financial.revenue_potential.toLocaleString();
+            document.getElementById('laborCost').textContent = formatAccountingRound(data.financial.labor_cost);
+            document.getElementById('fixedExpenses').textContent = formatAccountingRound(data.financial.fixed_expenses);
+            document.getElementById('variableExpenses').textContent = formatAccountingRound(data.financial.variable_expenses);
+            document.getElementById('totalCost').textContent = formatAccountingRound(data.financial.total_monthly_cost);
+            document.getElementById('revenueRow').textContent = formatAccountingRound(data.financial.revenue_potential);
 
             const netMargin = data.financial.net_margin;
             const netMarginEl = document.getElementById('netMargin');
-            netMarginEl.textContent = '$' + netMargin.toLocaleString();
+            netMarginEl.textContent = formatAccountingRound(netMargin);
             const marginRow = document.getElementById('marginRow');
             if (netMargin >= 0) {
                 marginRow.classList.add('table-success');

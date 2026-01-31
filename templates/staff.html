@@ -37,7 +37,7 @@
                             <tr>
                                 <td><strong>{{ member.name }}</strong></td>
                                 <td>{{ member.permit_level }}</td>
-                                <td>${{ "%.2f"|format(member.hourly_rate) }}/hr</td>
+                                <td>{{ member.hourly_rate|accounting }}/hr</td>
                                 <td>
                                     <div class="small">
                                         {% if member.ece_units > 0 %}

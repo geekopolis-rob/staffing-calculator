@@ -25,19 +25,19 @@
             </div>
             <div class="col">
                 <div class="border rounded p-2">
-                    <h4 class="text-success mb-0">${{ "%.2f"|format(weekly_labor.daily_cost) }}</h4>
+                    <h4 class="text-success mb-0">{{ weekly_labor.daily_cost|accounting }}</h4>
                     <small class="text-muted">Daily Cost</small>
                 </div>
             </div>
             <div class="col">
                 <div class="border rounded p-2">
-                    <h4 class="text-success mb-0">${{ "%.2f"|format(weekly_labor.weekly_cost) }}</h4>
+                    <h4 class="text-success mb-0">{{ weekly_labor.weekly_cost|accounting }}</h4>
                     <small class="text-muted">Weekly Cost</small>
                 </div>
             </div>
             <div class="col">
                 <div class="border rounded p-2">
-                    <h4 class="text-info mb-0">${{ "%.2f"|format(weekly_labor.monthly_cost) }}</h4>
+                    <h4 class="text-info mb-0">{{ weekly_labor.monthly_cost|accounting }}</h4>
                     <small class="text-muted">Monthly Cost</small>
                 </div>
             </div>
@@ -212,7 +212,7 @@
                     <!-- Summary stats -->
                     <div class="d-flex gap-4 mb-2 small text-muted">
                         <span>{{ day.labor.total_positions }} staff</span>
-                        <span>${{ "%.0f"|format(day.labor.daily_cost) }}/day</span>
+                        <span>{{ day.labor.daily_cost|accounting_round }}/day</span>
                     </div>
 
                     <!-- Detailed timeline -->

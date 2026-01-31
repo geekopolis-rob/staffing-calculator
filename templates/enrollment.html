@@ -45,8 +45,8 @@
                             <small class="text-muted">{{ enrollment.package.core_plan.get_schedule_display() }}</small>
                         </td>
                         <td><strong class="text-primary">{{ enrollment.child_count }}</strong> children</td>
-                        <td>${{ "%.2f"|format(enrollment.package.monthly_tuition) }}</td>
-                        <td><strong class="text-success">${{ "%.2f"|format(enrollment.package.monthly_tuition * enrollment.child_count) }}</strong></td>
+                        <td>{{ enrollment.package.monthly_tuition|accounting }}</td>
+                        <td><strong class="text-success">{{ (enrollment.package.monthly_tuition * enrollment.child_count)|accounting }}</strong></td>
                         <td>
                             <span class="badge {% if enrollment.status == 'active' %}bg-success{% else %}bg-secondary{% endif %}">
                                 {{ enrollment.status|title }}
@@ -101,7 +101,7 @@
                                 <select class="form-select" id="edit_package_{{ enrollment.id }}" name="enrollment_package_id" required>
                                     {% for package in packages %}
                                     <option value="{{ package.id }}" {% if package.id == enrollment.enrollment_package_id %}selected{% endif %}>
-                                        {{ package.name }} - ${{ "%.2f"|format(package.monthly_tuition) }}/month
+                                        {{ package.name }} - {{ package.monthly_tuition|accounting }}/month
                                     </option>
                                     {% endfor %}
                                 </select>
@@ -157,7 +157,7 @@
                             <option value="">Select Package</option>
                             {% for package in packages %}
                             <option value="{{ package.id }}">
-                                {{ package.name }} - ${{ "%.2f"|format(package.monthly_tuition) }}/month
+                                {{ package.name }} - {{ package.monthly_tuition|accounting }}/month
                             </option>
                             {% endfor %}
                         </select>

@@ -15,7 +15,7 @@
     <div class="col-md-3 mb-2">
         <div class="card">
             <div class="card-body py-3">
-                <h4 class="text-primary mb-0">${{ "%.2f"|format(total_fixed) }}</h4>
+                <h4 class="text-primary mb-0">{{ total_fixed|accounting }}</h4>
                 <small class="text-muted">Total Fixed</small>
             </div>
         </div>
@@ -23,7 +23,7 @@
     <div class="col-md-3 mb-2">
         <div class="card">
             <div class="card-body py-3">
-                <h4 class="text-info mb-0">${{ "%.2f"|format(total_variable) }}</h4>
+                <h4 class="text-info mb-0">{{ total_variable|accounting }}</h4>
                 <small class="text-muted">Total Variable</small>
             </div>
         </div>
@@ -31,7 +31,7 @@
     <div class="col-md-3 mb-2">
         <div class="card">
             <div class="card-body py-3">
-                <h4 class="text-success mb-0">${{ "%.2f"|format(grand_total) }}</h4>
+                <h4 class="text-success mb-0">{{ grand_total|accounting }}</h4>
                 <small class="text-muted">Grand Total</small>
             </div>
         </div>
@@ -39,7 +39,7 @@
     <div class="col-md-3 mb-2">
         <div class="card">
             <div class="card-body py-3">
-                <h4 class="text-warning mb-0">${{ "%.2f"|format(per_child_monthly) }}</h4>
+                <h4 class="text-warning mb-0">{{ per_child_monthly|accounting }}</h4>
                 <small class="text-muted">Per Child/Month</small>
             </div>
         </div>
@@ -60,7 +60,7 @@
         <h6 class="mt-3 mb-2">
             <i class="bi bi-{% if cat_key == 'utility' %}lightning{% elif cat_key == 'lease' %}house{% elif cat_key == 'professional' %}briefcase{% else %}mortarboard{% endif %}"></i>
             {{ cat_data.label }}
-            <span class="badge bg-secondary float-end">${{ "%.2f"|format(cat_data.subtotal) }}/mo</span>
+            <span class="badge bg-secondary float-end">{{ cat_data.subtotal|accounting }}/mo</span>
         </h6>
         <div class="table-responsive">
             <table class="table table-sm table-hover mb-3">
@@ -78,7 +78,7 @@
                     <tr class="{{ 'text-muted' if not expense.is_active }}">
                         <td><strong>{{ expense.name }}</strong></td>
                         <td><small>{{ expense.description or '' }}</small></td>
-                        <td class="text-end">${{ "%.2f"|format(expense.monthly_amount) }}</td>
+                        <td class="text-end">{{ expense.monthly_amount|accounting }}</td>
                         <td class="text-center">
                             <span class="badge {% if expense.is_active %}bg-success{% else %}bg-secondary{% endif %}">
                                 {{ 'Active' if expense.is_active else 'Inactive' }}
@@ -193,10 +193,10 @@
                             <br><small class="text-muted">{{ data.description }}</small>
                             {% endif %}
                         </td>
-                        <td class="text-center">${{ "%.2f"|format(data.rates.get(('infant', 'core'), 0)) }}</td>
-                        <td class="text-center">${{ "%.2f"|format(data.rates.get(('infant', 'extended'), 0)) }}</td>
-                        <td class="text-center">${{ "%.2f"|format(data.rates.get(('child', 'core'), 0)) }}</td>
-                        <td class="text-center">${{ "%.2f"|format(data.rates.get(('child', 'extended'), 0)) }}</td>
+                        <td class="text-center">{{ data.rates.get(('infant', 'core'), 0)|accounting }}</td>
+                        <td class="text-center">{{ data.rates.get(('infant', 'extended'), 0)|accounting }}</td>
+                        <td class="text-center">{{ data.rates.get(('child', 'core'), 0)|accounting }}</td>
+                        <td class="text-center">{{ data.rates.get(('child', 'extended'), 0)|accounting }}</td>
                         <td class="text-center">
                             <span class="badge {% if data.is_active %}bg-success{% else %}bg-secondary{% endif %}">
                                 {{ 'Active' if data.is_active else 'Inactive' }}
@@ -251,16 +251,16 @@
                                 {{ schedule_types[item.schedule_type].name }}
                             </span>
                         </td>
-                        <td class="text-center">${{ "%.2f"|format(item.rate) }}</td>
+                        <td class="text-center">{{ item.rate|accounting }}</td>
                         <td class="text-center">{{ item.children }}</td>
-                        <td class="text-end">${{ "%.2f"|format(item.total) }}</td>
+                        <td class="text-end">{{ item.total|accounting }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot>
                     <tr class="table-dark">
                         <td colspan="4"><strong>Total Variable Expenses</strong></td>
-                        <td class="text-end"><strong>${{ "%.2f"|format(total_variable) }}</strong></td>
+                        <td class="text-end"><strong>{{ total_variable|accounting }}</strong></td>
                     </tr>
                 </tfoot>
             </table>

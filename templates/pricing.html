@@ -247,9 +247,9 @@
                         </td>
                         <td>
                             {% if addon.pricing_type == 'time_based' %}
-                            ${{ "%.2f"|format(addon.price) }} / {{ addon.minutes_unit }} min
+                            {{ addon.price|accounting }} / {{ addon.minutes_unit }} min
                             {% else %}
-                            ${{ "%.2f"|format(addon.price) }}
+                            {{ addon.price|accounting }}
                             {% endif %}
                         </td>
                         <td>
@@ -389,7 +389,7 @@
                             {% endif %}
                         </td>
                         <td><span class="badge bg-secondary">{{ fee.fee_type|title }}</span></td>
-                        <td>${{ "%.2f"|format(fee.amount) }}</td>
+                        <td>{{ fee.amount|accounting }}</td>
                         <td>
                             {% if fee.is_refundable %}
                             <span class="badge bg-success">Yes</span>
@@ -535,7 +535,7 @@
                             {% if discount.discount_type == 'percentage' %}
                             {{ discount.amount }}%
                             {% else %}
-                            ${{ "%.2f"|format(discount.amount) }}
+                            {{ discount.amount|accounting }}
                             {% endif %}
                         </td>
                         <td><span class="badge bg-secondary">{{ discount.applies_to|replace('_', ' ')|title }}</span></td>
