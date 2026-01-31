@@ -12,10 +12,16 @@
             <div class="card-body">
                 <p class="text-muted small">Configure enrollment distribution. Changes are saved automatically and flow to the Schedule and other pages.</p>
 
-                <!-- Total Children -->
-                <div class="mb-4">
-                    <label class="form-label fw-bold"><i class="bi bi-people-fill"></i> Total Children</label>
-                    <input type="number" class="form-control form-control-lg" id="totalChildren" value="{{ settings.total_children }}" min="1" max="200">
+                <!-- Total Children & Max Capacity -->
+                <div class="row mb-4">
+                    <div class="col-6">
+                        <label class="form-label fw-bold"><i class="bi bi-people-fill"></i> Enrolled</label>
+                        <input type="number" class="form-control form-control-lg" id="totalChildren" value="{{ settings.total_children }}" min="1" max="500">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-bold"><i class="bi bi-building"></i> Licensed Capacity</label>
+                        <input type="number" class="form-control form-control-lg" id="maxCapacity" value="{{ settings.max_capacity or 100 }}" min="1" max="500">
+                    </div>
                 </div>
 
                 <!-- Age Mix -->
@@ -208,6 +214,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const mwfPercent = parseInt(document.getElementById('mwfPercent').value) || 0;
         const tthPercent = parseInt(document.getElementById('tthPercent').value) || 0;
         const totalChildren = parseInt(document.getElementById('totalChildren').value) || 50;
+        const maxCapacity = parseInt(document.getElementById('maxCapacity').value) || 100;
 
         // Validate
         if (infantPercent + childPercent !== 100) {
@@ -227,7 +234,8 @@ document.addEventListener('DOMContentLoaded', function() {
             age_mix: { infant: infantPercent, child: childPercent },
             schedule_mix: { core: corePercent, extended: extendedPercent },
             days_mix: { full: fullPercent, mwf: mwfPercent, tth: tthPercent },
-            total_children: totalChildren
+            total_children: totalChildren,
+            max_capacity: maxCapacity
         };
 
         const btn = document.getElementById('saveBtn');

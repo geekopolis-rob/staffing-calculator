@@ -223,9 +223,8 @@
                 <div class="mt-3">
                     <small class="text-muted">
                         <i class="bi bi-info-circle"></i>
-                        Shows how changes in key variables affect your monthly profit.
-                        <span class="text-success">Green</span> = profitable,
-                        <span class="text-danger">Red</span> = loss.
+                        <strong>Top:</strong> Monthly profit (<span class="text-success">green</span> = profitable, <span class="text-danger">red</span> = loss).
+                        <strong>Bottom:</strong> Change from base (<span class="text-success">↑ green</span> = improvement, <span class="text-danger">↓ red</span> = decline).
                     </small>
                 </div>
             </div>
@@ -416,9 +415,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
             sensitivityTable.innerHTML = data.sensitivity.map(row => {
                 const cells = row.scenarios.map(s => {
-                    const color = s.is_profitable ? 'text-success' : 'text-danger';
+                    const profitColor = s.is_profitable ? 'text-success' : 'text-danger';
+                    const changeColor = s.profit_change >= 0 ? 'text-success' : 'text-danger';
+                    const changeIcon = s.profit_change >= 0 ? '↑' : '↓';
                     const sign = s.profit_change >= 0 ? '+' : '';
-                    return `<td class="${color}">$${s.new_profit.toLocaleString()}<br><small>(${sign}$${s.profit_change.toLocaleString()})</small></td>`;
+                    return `<td><span class="${profitColor}">$${s.new_profit.toLocaleString()}</span><br><small class="${changeColor}">${changeIcon} ${sign}$${s.profit_change.toLocaleString()}/mo</small></td>`;
                 }).join('');
                 return `<tr><th class="text-start">${variableNames[row.variable] || row.variable}</th>${cells}</tr>`;
             }).join('');

@@ -249,6 +249,7 @@ class CapacitySettings(db.Model):
     """
     id = db.Column(db.Integer, primary_key=True)
     total_children = db.Column(db.Integer, nullable=False, default=50)
+    max_capacity = db.Column(db.Integer, nullable=False, default=100)  # Licensed capacity
 
     # Age mix percentages (must total 100)
     infant_percent = db.Column(db.Float, nullable=False, default=20.0)
@@ -1968,6 +1969,7 @@ def get_capacity_settings():
     settings = CapacitySettings.get_or_create()
     return jsonify({
         'total_children': settings.total_children,
+        'max_capacity': settings.max_capacity if settings.max_capacity else 100,
         'age_mix': settings.get_age_mix(),
         'schedule_mix': settings.get_schedule_mix(),
         'days_mix': settings.get_days_mix()
@@ -1982,6 +1984,7 @@ def save_capacity_settings():
     schedule_mix = data.get('schedule_mix', {'core': 50, 'extended': 50})
     days_mix = data.get('days_mix', {'full': 60, 'mwf': 30, 'tth': 10})
     total_children = data.get('total_children', 50)
+    max_capacity = data.get('max_capacity', 100)
 
     # Validate that each mix totals 100
     if abs(sum(age_mix.values()) - 100) > 0.01:
@@ -1994,6 +1997,7 @@ def save_capacity_settings():
     # Update settings
     settings = CapacitySettings.get_or_create()
     settings.total_children = total_children
+    settings.max_capacity = max_capacity
     settings.infant_percent = age_mix.get('infant', 20)
     settings.child_percent = age_mix.get('child', 80)
     settings.core_percent = schedule_mix.get('core', 50)
@@ -2314,8 +2318,8 @@ def calculate_projections():
     else:
         break_even_children = 0  # Cannot break even
 
-    # Capacity utilization (assuming 100 is max licensed capacity, can be adjusted)
-    max_capacity = 100
+    # Capacity utilization based on licensed capacity
+    max_capacity = settings.max_capacity if settings.max_capacity else 100
     utilization_pct = (settings.total_children / max_capacity * 100) if max_capacity > 0 else 0
 
     return {
@@ -2447,11 +2451,23 @@ def projections_sensitivity():
     })
 
 
+def run_migrations():
+    """Run database migrations for schema changes"""
+    with db.engine.connect() as conn:
+        # Check if max_capacity column exists in capacity_settings
+        result = conn.execute(db.text("PRAGMA table_info(capacity_settings)"))
+        columns = [row[1] for row in result.fetchall()]
+        if 'max_capacity' not in columns:
+            conn.execute(db.text("ALTER TABLE capacity_settings ADD COLUMN max_capacity INTEGER DEFAULT 100"))
+            conn.commit()
+
+
 @app.route('/initialize-db')
 def initialize_db():
     """Initialize database with sample data"""
     import json
     db.create_all()
+    run_migrations()
 
     # Add sample age groups if none exist
     if AgeGroup.query.count() == 0:
