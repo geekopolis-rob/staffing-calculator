@@ -2492,8 +2492,17 @@ def run_migrations():
     """Run database migrations for schema changes"""
     with db.engine.connect() as conn:
         # Check if max_capacity column exists in capacity_settings
-        result = conn.execute(db.text("PRAGMA table_info(capacity_settings)"))
-        columns = [row[1] for row in result.fetchall()]
+        # Use database-appropriate query for column introspection
+        if database_url:  # PostgreSQL
+            result = conn.execute(db.text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'capacity_settings'"
+            ))
+            columns = [row[0] for row in result.fetchall()]
+        else:  # SQLite
+            result = conn.execute(db.text("PRAGMA table_info(capacity_settings)"))
+            columns = [row[1] for row in result.fetchall()]
+
         if 'max_capacity' not in columns:
             conn.execute(db.text("ALTER TABLE capacity_settings ADD COLUMN max_capacity INTEGER DEFAULT 100"))
             conn.commit()
