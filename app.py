@@ -2495,18 +2495,22 @@ def calculate_projections():
     revenue_per_child = monthly_revenue / settings.total_children if settings.total_children > 0 else 0
     cost_per_child = total_expenses / settings.total_children if settings.total_children > 0 else 0
 
-    # Break-even calculation
-    # Fixed costs that don't scale with enrollment: fixed expenses
-    # Variable costs that scale: labor + per-child costs
-    if settings.total_children > 0:
-        variable_cost_per_child = (labor_monthly + total_variable) / settings.total_children
-    else:
-        variable_cost_per_child = 0
-
-    if revenue_per_child > variable_cost_per_child:
-        break_even_children = math.ceil(total_fixed / (revenue_per_child - variable_cost_per_child))
-    else:
-        break_even_children = 0  # Cannot break even
+    # Break-even calculation via iterative simulation
+    # Loops from 1 to max_capacity, recalculating actual labor (with step-function
+    # ratio thresholds) at each enrollment level to find where revenue >= costs.
+    variable_per_child = total_variable / settings.total_children if settings.total_children > 0 else 0
+    max_cap = settings.max_capacity if settings.max_capacity else 200
+    break_even_children = 0
+    for n in range(1, max_cap + 1):
+        n_revenue = n * revenue_per_child
+        n_variable = n * variable_per_child
+        # Recalculate labor at this enrollment level (step-function staffing)
+        n_capacity = calculate_capacity_plan(age_mix, schedule_mix, days_mix, n)
+        n_labor = n_capacity.get('labor_costs', {}).get('costs', {}).get('monthly', 0)
+        n_total_cost = total_fixed + n_labor + n_variable
+        if n_revenue >= n_total_cost:
+            break_even_children = n
+            break
 
     # Capacity utilization based on licensed capacity
     max_capacity = settings.max_capacity if settings.max_capacity else 100
