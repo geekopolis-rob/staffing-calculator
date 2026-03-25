@@ -429,8 +429,19 @@ document.addEventListener('DOMContentLoaded', function() {
             // Labor cost breakdown table
             const laborTable = document.getElementById('laborBreakdownTable');
             if (data.expenses.labor_breakdown && data.expenses.labor_breakdown.length > 0) {
-                laborTable.innerHTML = data.expenses.labor_breakdown.map(item => `
-                    <tr>
+                laborTable.innerHTML = data.expenses.labor_breakdown.map(item => {
+                    if (item.is_burden) {
+                        return `<tr class="table-warning">
+                            <td><strong>${item.role}</strong></td>
+                            <td><small class="text-muted">${item.shift}</small></td>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td class="text-end"><strong>${formatAccountingRound(item.weekly_cost)}</strong></td>
+                            <td class="text-end"><strong>${formatAccountingRound(item.monthly_cost)}</strong></td>
+                        </tr>`;
+                    }
+                    return `<tr>
                         <td>${item.role}</td>
                         <td><small class="text-muted">${item.shift}</small></td>
                         <td class="text-center">${item.count}</td>
@@ -438,8 +449,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         <td class="text-end">${formatAccounting(item.hourly_rate)}</td>
                         <td class="text-end">${formatAccountingRound(item.weekly_cost)}</td>
                         <td class="text-end">${formatAccountingRound(item.monthly_cost)}</td>
-                    </tr>
-                `).join('');
+                    </tr>`;
+                }).join('');
                 document.getElementById('totalWeeklyLabor').textContent =
                     formatAccountingRound(data.expenses.labor_breakdown_totals.total_weekly);
                 document.getElementById('totalMonthlyLabor').textContent =

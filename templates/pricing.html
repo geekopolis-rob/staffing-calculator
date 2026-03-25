@@ -16,10 +16,10 @@
         <h5 class="mb-0"><i class="bi bi-grid-3x3"></i> Plan Pricing</h5>
     </div>
     <div class="card-body">
-        <p class="text-muted mb-4">Set prices for all 12 plan combinations. All plans are billed monthly.</p>
+        <p class="text-muted mb-4">Set prices for all plan combinations. All plans are billed monthly.</p>
         <form method="POST" action="{{ url_for('update_fixed_plan_prices') }}">
-            <!-- Infant Plans -->
-            <h6 class="mb-3"><i class="bi bi-baby-fill"></i> Infant Plans (4 months - 2 years)</h6>
+            {% for ag in age_groups %}
+            <h6 class="mb-3"><i class="bi bi-people-fill"></i> {{ ag.name }} <small class="text-muted">({{ ag.required_ratio }})</small></h6>
             <div class="table-responsive mb-4">
                 <table class="table table-bordered">
                     <thead class="table-light">
@@ -31,170 +31,26 @@
                         </tr>
                     </thead>
                     <tbody>
+                        {% for sched_type, sched_info in [('core', {'name': 'Core Hours', 'time': '9:00 AM - 3:00 PM'}), ('extended', {'name': 'Extended Hours', 'time': '7:30 AM - 5:30 PM'})] %}
                         <tr>
-                            <td><strong>Core Hours</strong><br><small class="text-muted">9:00 AM - 3:00 PM</small></td>
-                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'infant' and plan.schedule_type == 'core' %}
-                            {% if plan.day_pattern == 'full' %}
+                            <td><strong>{{ sched_info.name }}</strong><br><small class="text-muted">{{ sched_info.time }}</small></td>
+                            {% for day_pat in ['full', 'mwf', 'tth'] %}
                             <td>
+                                {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_id == ag.id and plan.schedule_type == sched_type and plan.day_pattern == day_pat %}
                                 <div class="input-group">
                                     <span class="input-group-text">$</span>
                                     <input type="number" class="form-control" name="price_{{ plan.id }}"
                                            value="{{ plan.base_price|int }}" step="1" min="0">
                                 </div>
+                                {% endfor %}
                             </td>
-                            {% endif %}
-                            {% endfor %}
-                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'infant' and plan.schedule_type == 'core' %}
-                            {% if plan.day_pattern == 'mwf' %}
-                            <td>
-                                <div class="input-group">
-                                    <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
-                                           value="{{ plan.base_price|int }}" step="1" min="0">
-                                </div>
-                            </td>
-                            {% endif %}
-                            {% endfor %}
-                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'infant' and plan.schedule_type == 'core' %}
-                            {% if plan.day_pattern == 'tth' %}
-                            <td>
-                                <div class="input-group">
-                                    <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
-                                           value="{{ plan.base_price|int }}" step="1" min="0">
-                                </div>
-                            </td>
-                            {% endif %}
                             {% endfor %}
                         </tr>
-                        <tr>
-                            <td><strong>Extended Hours</strong><br><small class="text-muted">7:30 AM - 5:30 PM</small></td>
-                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'infant' and plan.schedule_type == 'extended' %}
-                            {% if plan.day_pattern == 'full' %}
-                            <td>
-                                <div class="input-group">
-                                    <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
-                                           value="{{ plan.base_price|int }}" step="1" min="0">
-                                </div>
-                            </td>
-                            {% endif %}
-                            {% endfor %}
-                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'infant' and plan.schedule_type == 'extended' %}
-                            {% if plan.day_pattern == 'mwf' %}
-                            <td>
-                                <div class="input-group">
-                                    <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
-                                           value="{{ plan.base_price|int }}" step="1" min="0">
-                                </div>
-                            </td>
-                            {% endif %}
-                            {% endfor %}
-                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'infant' and plan.schedule_type == 'extended' %}
-                            {% if plan.day_pattern == 'tth' %}
-                            <td>
-                                <div class="input-group">
-                                    <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
-                                           value="{{ plan.base_price|int }}" step="1" min="0">
-                                </div>
-                            </td>
-                            {% endif %}
-                            {% endfor %}
-                        </tr>
+                        {% endfor %}
                     </tbody>
                 </table>
             </div>
-
-            <!-- Child Plans -->
-            <h6 class="mb-3"><i class="bi bi-people-fill"></i> Child Plans (2+ years)</h6>
-            <div class="table-responsive mb-4">
-                <table class="table table-bordered">
-                    <thead class="table-light">
-                        <tr>
-                            <th style="width: 25%">Schedule</th>
-                            <th style="width: 25%">Mon-Fri (5 days)</th>
-                            <th style="width: 25%">Mon/Wed/Fri (3 days)</th>
-                            <th style="width: 25%">Tue/Thu (2 days)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><strong>Core Hours</strong><br><small class="text-muted">9:00 AM - 3:00 PM</small></td>
-                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'child' and plan.schedule_type == 'core' %}
-                            {% if plan.day_pattern == 'full' %}
-                            <td>
-                                <div class="input-group">
-                                    <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
-                                           value="{{ plan.base_price|int }}" step="1" min="0">
-                                </div>
-                            </td>
-                            {% endif %}
-                            {% endfor %}
-                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'child' and plan.schedule_type == 'core' %}
-                            {% if plan.day_pattern == 'mwf' %}
-                            <td>
-                                <div class="input-group">
-                                    <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
-                                           value="{{ plan.base_price|int }}" step="1" min="0">
-                                </div>
-                            </td>
-                            {% endif %}
-                            {% endfor %}
-                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'child' and plan.schedule_type == 'core' %}
-                            {% if plan.day_pattern == 'tth' %}
-                            <td>
-                                <div class="input-group">
-                                    <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
-                                           value="{{ plan.base_price|int }}" step="1" min="0">
-                                </div>
-                            </td>
-                            {% endif %}
-                            {% endfor %}
-                        </tr>
-                        <tr>
-                            <td><strong>Extended Hours</strong><br><small class="text-muted">7:30 AM - 5:30 PM</small></td>
-                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'child' and plan.schedule_type == 'extended' %}
-                            {% if plan.day_pattern == 'full' %}
-                            <td>
-                                <div class="input-group">
-                                    <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
-                                           value="{{ plan.base_price|int }}" step="1" min="0">
-                                </div>
-                            </td>
-                            {% endif %}
-                            {% endfor %}
-                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'child' and plan.schedule_type == 'extended' %}
-                            {% if plan.day_pattern == 'mwf' %}
-                            <td>
-                                <div class="input-group">
-                                    <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
-                                           value="{{ plan.base_price|int }}" step="1" min="0">
-                                </div>
-                            </td>
-                            {% endif %}
-                            {% endfor %}
-                            {% for plan in core_plans if plan.is_fixed_plan and plan.age_group_type == 'child' and plan.schedule_type == 'extended' %}
-                            {% if plan.day_pattern == 'tth' %}
-                            <td>
-                                <div class="input-group">
-                                    <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" name="price_{{ plan.id }}"
-                                           value="{{ plan.base_price|int }}" step="1" min="0">
-                                </div>
-                            </td>
-                            {% endif %}
-                            {% endfor %}
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            {% endfor %}
 
             <button type="submit" class="btn btn-primary">
                 <i class="bi bi-save"></i> Save All Prices

@@ -59,29 +59,37 @@
                     </div>
                 </div>
 
-                <!-- Age Mix -->
+                <!-- Age Mix (dynamic from Age Groups page) -->
                 <div class="mb-4">
                     <label class="form-label fw-bold"><i class="bi bi-person-badge"></i> Age Mix</label>
+                    {% set age_colors = ['bg-warning', 'bg-info', 'bg-success', 'bg-primary', 'bg-danger', 'bg-secondary'] %}
                     <div class="row mb-2">
-                        <div class="col-6">
-                            <label class="form-label small">Infant (4mo-2yrs)</label>
-                            <div class="input-group">
-                                <input type="number" class="form-control age-input" id="infantPercent" value="{{ settings.infant_percent|int }}" min="0" max="100">
+                        {% for ag in age_groups %}
+                        <div class="col">
+                            <label class="form-label small">{{ ag.name.split('(')[0]|trim }} <small class="text-muted">({{ ag.required_ratio }})</small></label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" class="form-control age-input"
+                                       id="agePercent_{{ ag.id }}"
+                                       data-age-group-id="{{ ag.id }}"
+                                       value="{{ age_mix.get(ag.id, 0)|int }}" min="0" max="100">
                                 <span class="input-group-text">%</span>
                             </div>
                         </div>
-                        <div class="col-6">
-                            <label class="form-label small">Child (2+ yrs)</label>
-                            <div class="input-group">
-                                <input type="number" class="form-control age-input" id="childPercent" value="{{ settings.child_percent|int }}" min="0" max="100">
-                                <span class="input-group-text">%</span>
-                            </div>
-                        </div>
+                        {% endfor %}
                     </div>
                     <div class="progress progress-slider" id="ageSlider" style="height: 20px;">
-                        <div class="progress-bar bg-warning" id="infantBar" style="width: {{ settings.infant_percent }}%">{{ settings.infant_percent|int }}%</div>
-                        <div class="progress-bar bg-success" id="childBar" style="width: {{ settings.child_percent }}%">{{ settings.child_percent|int }}%</div>
-                        <div class="progress-divider" id="ageDivider" style="left: {{ settings.infant_percent }}%"></div>
+                        {% for ag in age_groups %}
+                        <div class="progress-bar {{ age_colors[loop.index0 % age_colors|length] }}" id="ageBar_{{ ag.id }}" style="width: {{ age_mix.get(ag.id, 0) }}%">{{ age_mix.get(ag.id, 0)|int }}%</div>
+                        {% endfor %}
+                        {% for ag in age_groups %}
+                        {% if not loop.last %}
+                        {% set cumulative = namespace(val=0) %}
+                        {% for prev_ag in age_groups[:loop.index] %}
+                            {% set cumulative.val = cumulative.val + age_mix.get(prev_ag.id, 0) %}
+                        {% endfor %}
+                        <div class="progress-divider age-divider" id="ageDivider_{{ loop.index0 }}" style="left: {{ cumulative.val }}%"></div>
+                        {% endif %}
+                        {% endfor %}
                     </div>
                     <small class="text-muted" id="ageValidation">Total: 100%</small>
                 </div>
@@ -172,17 +180,27 @@ document.addEventListener('DOMContentLoaded', function() {
         return Math.max(min, Math.min(max, value));
     }
 
+    // Dynamic age group IDs from server
+    const ageGroupIds = [{% for ag in age_groups %}{{ ag.id }}{% if not loop.last %}, {% endif %}{% endfor %}];
+
     // Update progress bars on input change
     function updateAgeBars() {
-        const infant = parseInt(document.getElementById('infantPercent').value) || 0;
-        const child = parseInt(document.getElementById('childPercent').value) || 0;
-        const total = infant + child;
-
-        document.getElementById('infantBar').style.width = infant + '%';
-        document.getElementById('infantBar').textContent = infant + '%';
-        document.getElementById('childBar').style.width = child + '%';
-        document.getElementById('childBar').textContent = child + '%';
-        document.getElementById('ageDivider').style.left = infant + '%';
+        let total = 0;
+        let cumulative = 0;
+        ageGroupIds.forEach((id, idx) => {
+            const val = parseInt(document.getElementById('agePercent_' + id).value) || 0;
+            total += val;
+            const bar = document.getElementById('ageBar_' + id);
+            if (bar) {
+                bar.style.width = val + '%';
+                bar.textContent = val > 5 ? val + '%' : '';
+            }
+            cumulative += val;
+            if (idx < ageGroupIds.length - 1) {
+                const divider = document.getElementById('ageDivider_' + idx);
+                if (divider) divider.style.left = cumulative + '%';
+            }
+        });
 
         const validation = document.getElementById('ageValidation');
         if (total === 100) {
@@ -281,9 +299,37 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Setup snap on blur for age groups (N-value group)
+    ageGroupIds.forEach((id) => {
+        const input = document.getElementById('agePercent_' + id);
+        input.addEventListener('blur', function() {
+            let value = parseInt(this.value) || 0;
+            value = clamp(snapTo5(value), 0, 100);
+            this.value = value;
+            // Adjust others proportionally
+            const otherIds = ageGroupIds.filter(i => i !== id);
+            const otherTotal = otherIds.reduce((sum, i) => sum + (parseInt(document.getElementById('agePercent_' + i).value) || 0), 0);
+            const remaining = 100 - value;
+            if (otherTotal > 0) {
+                let allocated = 0;
+                otherIds.forEach((otherId, idx) => {
+                    const otherVal = parseInt(document.getElementById('agePercent_' + otherId).value) || 0;
+                    if (idx === otherIds.length - 1) {
+                        document.getElementById('agePercent_' + otherId).value = remaining - allocated;
+                    } else {
+                        const newVal = snapTo5(Math.round(otherVal * remaining / otherTotal));
+                        document.getElementById('agePercent_' + otherId).value = newVal;
+                        allocated += newVal;
+                    }
+                });
+            } else if (otherIds.length > 0) {
+                document.getElementById('agePercent_' + otherIds[0]).value = remaining;
+            }
+            updateAgeBars();
+        });
+    });
+
     // Setup snap on blur for 2-value groups
-    setupSnapOnBlur('infantPercent', 'childPercent', updateAgeBars);
-    setupSnapOnBlur('childPercent', 'infantPercent', updateAgeBars);
     setupSnapOnBlur('corePercent', 'extendedPercent', updateScheduleBars);
     setupSnapOnBlur('extendedPercent', 'corePercent', updateScheduleBars);
 
@@ -403,7 +449,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Setup drag handlers
-    setupDrag2('ageSlider', 'ageDivider', 'infantPercent', 'childPercent', updateAgeBars);
+    // Age slider: use setupDrag2 for 2 groups, setupDrag3 for 3 groups, or no drag for 1
+    {% if age_groups|length == 2 %}
+    setupDrag2('ageSlider', 'ageDivider_0', 'agePercent_{{ age_groups[0].id }}', 'agePercent_{{ age_groups[1].id }}', updateAgeBars);
+    {% elif age_groups|length >= 3 %}
+    setupDrag3('ageSlider', 'ageDivider_0', 'ageDivider_1', 'agePercent_{{ age_groups[0].id }}', 'agePercent_{{ age_groups[1].id }}', 'agePercent_{{ age_groups[2].id }}', updateAgeBars);
+    {% endif %}
     setupDrag2('scheduleSlider', 'scheduleDivider', 'corePercent', 'extendedPercent', updateScheduleBars);
     setupDrag3('daysSlider', 'daysDivider1', 'daysDivider2', 'fullPercent', 'mwfPercent', 'tthPercent', updateDaysBars);
 
@@ -420,8 +471,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Save button
     document.getElementById('saveBtn').addEventListener('click', function() {
-        const infantPercent = parseInt(document.getElementById('infantPercent').value) || 0;
-        const childPercent = parseInt(document.getElementById('childPercent').value) || 0;
+        // Build dynamic age mix
+        const ageMix = {};
+        let ageTotal = 0;
+        ageGroupIds.forEach(id => {
+            const val = parseInt(document.getElementById('agePercent_' + id).value) || 0;
+            ageMix[id] = val;
+            ageTotal += val;
+        });
+
         const corePercent = parseInt(document.getElementById('corePercent').value) || 0;
         const extendedPercent = parseInt(document.getElementById('extendedPercent').value) || 0;
         const fullPercent = parseInt(document.getElementById('fullPercent').value) || 0;
@@ -431,7 +489,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const maxCapacity = parseInt(document.getElementById('maxCapacity').value) || 100;
 
         // Validate
-        if (infantPercent + childPercent !== 100) {
+        if (ageTotal !== 100) {
             showStatus('Age mix must total 100%', 'danger');
             return;
         }
@@ -445,7 +503,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const data = {
-            age_mix: { infant: infantPercent, child: childPercent },
+            age_mix: ageMix,
             schedule_mix: { core: corePercent, extended: extendedPercent },
             days_mix: { full: fullPercent, mwf: mwfPercent, tth: tthPercent },
             total_children: totalChildren,

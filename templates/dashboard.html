@@ -58,13 +58,14 @@
                 <!-- Age Mix -->
                 <div class="mb-3">
                     <label class="form-label small fw-bold">Age Mix</label>
-                    <div class="progress" style="height: 24px;">
-                        <div class="progress-bar bg-warning" id="infantBar" style="width: {{ settings.infant_percent }}%">
-                            <small>Infant {{ settings.infant_percent|int }}%</small>
+                    {% set age_colors = ['bg-warning', 'bg-info', 'bg-success', 'bg-primary', 'bg-danger', 'bg-secondary'] %}
+                    <div class="progress" style="height: 24px;" id="ageMixProgress">
+                        {% for ag in age_groups %}
+                        {% set pct = age_mix.get(ag.id, 0) %}
+                        <div class="progress-bar {{ age_colors[loop.index0 % age_colors|length] }}" id="ageBar_{{ ag.id }}" style="width: {{ pct }}%">
+                            <small>{{ ag.name.split('(')[0]|trim }} {{ pct|int }}%</small>
                         </div>
-                        <div class="progress-bar bg-success" id="childBar" style="width: {{ settings.child_percent }}%">
-                            <small>Child {{ settings.child_percent|int }}%</small>
-                        </div>
+                        {% endfor %}
                     </div>
                 </div>
 
@@ -196,16 +197,17 @@
             </div>
             <div class="card-body">
                 <table class="table table-sm table-striped mb-3">
-                    <thead>
+                    <thead id="dailyAttendanceHead">
                         <tr>
                             <th>Day</th>
-                            <th class="text-center">Infants</th>
-                            <th class="text-center">Children</th>
+                            {% for ag in age_groups %}
+                            <th class="text-center">{{ ag.name.split('(')[0]|trim }}</th>
+                            {% endfor %}
                             <th class="text-center">Total</th>
                         </tr>
                     </thead>
                     <tbody id="dailyAttendance">
-                        <tr><td colspan="4" class="text-center text-muted">Loading...</td></tr>
+                        <tr><td colspan="{{ age_groups|length + 2 }}" class="text-center text-muted">Loading...</td></tr>
                     </tbody>
                 </table>
 
@@ -235,13 +237,17 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('peakDay').textContent = data.enrollment.peak_day;
             document.getElementById('peakAttendance').textContent = data.enrollment.peak_attendance;
 
-            // Update progress bars
-            const infantPct = data.enrollment.age_mix.infant;
-            const childPct = data.enrollment.age_mix.child;
-            document.getElementById('infantBar').style.width = infantPct + '%';
-            document.getElementById('infantBar').innerHTML = '<small>Infant ' + infantPct + '%</small>';
-            document.getElementById('childBar').style.width = childPct + '%';
-            document.getElementById('childBar').innerHTML = '<small>Child ' + childPct + '%</small>';
+            // Update age mix progress bars dynamically
+            if (data.enrollment.age_groups) {
+                data.enrollment.age_groups.forEach(ag => {
+                    const pct = data.enrollment.age_mix[ag.id] || 0;
+                    const bar = document.getElementById('ageBar_' + ag.id);
+                    if (bar) {
+                        bar.style.width = pct + '%';
+                        bar.innerHTML = '<small>' + ag.name + ' ' + Math.round(pct) + '%</small>';
+                    }
+                });
+            }
 
             const corePct = data.enrollment.schedule_mix.core;
             const extendedPct = data.enrollment.schedule_mix.extended;
@@ -292,14 +298,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const peakDay = data.enrollment.peak_day;
             const tbody = document.getElementById('dailyAttendance');
 
+            const ageGroups = data.enrollment.age_groups || [];
             tbody.innerHTML = days.map(day => {
-                const dayData = dailyAttendance[day] || { infants: 0, children: 0, total: 0 };
+                const dayData = dailyAttendance[day] || {total: 0};
                 const isPeak = day === peakDay;
+                const ageCells = ageGroups.map(ag =>
+                    `<td class="text-center">${dayData[ag.id] || 0}</td>`
+                ).join('');
                 return `<tr class="${isPeak ? 'table-warning' : ''}">
                     <td>${day} ${isPeak ? '<span class="badge bg-warning text-dark">Peak</span>' : ''}</td>
-                    <td class="text-center">${dayData.infants}</td>
-                    <td class="text-center">${dayData.children}</td>
-                    <td class="text-center fw-bold">${dayData.total}</td>
+                    ${ageCells}
+                    <td class="text-center fw-bold">${dayData.total || 0}</td>
                 </tr>`;
             }).join('');
         })

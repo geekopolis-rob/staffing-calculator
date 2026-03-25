@@ -48,6 +48,10 @@
                                     {% endif %}
                                 </td>
                                 <td>
+                                    <button type="button" class="btn btn-sm btn-primary"
+                                            data-bs-toggle="modal" data-bs-target="#editAgeGroupModal{{ group.id }}" title="Edit">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
                                     <form method="POST" action="{{ url_for('delete_age_group', id=group.id) }}" style="display: inline;">
                                         <button type="submit" class="btn btn-sm btn-danger"
                                                 onclick="return confirm('Are you sure you want to delete this age group?')">
@@ -98,6 +102,66 @@
         </div>
     </div>
 </div>
+
+<!-- Edit Age Group Modals -->
+{% for group in age_groups %}
+<div class="modal fade" id="editAgeGroupModal{{ group.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-pencil"></i> Edit Age Group</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('edit_age_group', id=group.id) }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Group Name</label>
+                        <input type="text" class="form-control" name="name"
+                               value="{{ group.name }}" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Min Age (months)</label>
+                                <input type="number" class="form-control" name="min_age_months"
+                                       value="{{ group.min_age_months }}" required min="0">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Max Age (months)</label>
+                                <input type="number" class="form-control" name="max_age_months"
+                                       value="{{ group.max_age_months }}" required min="1">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Basic Ratio (Required)</label>
+                        <input type="text" class="form-control" name="required_ratio"
+                               value="{{ group.required_ratio }}" required pattern="\d+:\d+"
+                               title="Format: staff:children (e.g., 1:4)">
+                        <div class="form-text">Format: staff:children (e.g., 1:4)</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Enhanced Ratios (Optional)</label>
+                        <button type="button" class="btn btn-sm btn-outline-success mb-2" onclick="addEditEnhancedRatio({{ group.id }})">
+                            <i class="bi bi-plus-circle"></i> Add Enhanced Ratio
+                        </button>
+                        <div id="editEnhancedRatiosList{{ group.id }}"></div>
+                        <input type="hidden" id="edit_enhanced_ratios_json_{{ group.id }}" name="enhanced_ratios_json" value='{{ group.enhanced_ratios or "[]" }}'>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
 
 <!-- Add Age Group Modal -->
 <div class="modal fade" id="addAgeGroupModal" tabindex="-1">
@@ -272,5 +336,122 @@ document.getElementById('addAgeGroupModal').addEventListener('hidden.bs.modal', 
     enhancedRatioCounter = 0;
     renderEnhancedRatios();
 });
+
+// --- Edit modal enhanced ratios ---
+let editEnhancedRatios = {};  // keyed by group id
+let editCounters = {};
+
+function addEditEnhancedRatio(groupId) {
+    if (!editEnhancedRatios[groupId]) editEnhancedRatios[groupId] = [];
+    if (!editCounters[groupId]) editCounters[groupId] = editEnhancedRatios[groupId].length;
+    const id = editCounters[groupId]++;
+    editEnhancedRatios[groupId].push({
+        id: id,
+        ratio: '1:15',
+        description: '',
+        requires_teachers: 1,
+        requires_aides: 1,
+        aide_min_ece_units: 0
+    });
+    renderEditEnhancedRatios(groupId);
+}
+
+function removeEditEnhancedRatio(groupId, id) {
+    editEnhancedRatios[groupId] = editEnhancedRatios[groupId].filter(r => r.id !== id);
+    renderEditEnhancedRatios(groupId);
+}
+
+function updateEditEnhancedRatio(groupId, id, field, value) {
+    const ratio = editEnhancedRatios[groupId].find(r => r.id === id);
+    if (ratio) {
+        if (['requires_teachers', 'requires_aides', 'aide_min_ece_units'].includes(field)) {
+            ratio[field] = parseInt(value) || 0;
+        } else {
+            ratio[field] = value;
+        }
+        updateEditHiddenField(groupId);
+    }
+}
+
+function renderEditEnhancedRatios(groupId) {
+    const container = document.getElementById('editEnhancedRatiosList' + groupId);
+    const ratios = editEnhancedRatios[groupId] || [];
+    if (ratios.length === 0) {
+        container.innerHTML = '<div class="text-muted small">No enhanced ratios</div>';
+        updateEditHiddenField(groupId);
+        return;
+    }
+    container.innerHTML = ratios.map(ratio => `
+        <div class="card mb-2">
+            <div class="card-body py-2">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-2">
+                        <input type="text" class="form-control form-control-sm" placeholder="1:15"
+                               value="${ratio.ratio}" pattern="\\d+:\\d+"
+                               onchange="updateEditEnhancedRatio(${groupId}, ${ratio.id}, 'ratio', this.value)">
+                        <small class="text-muted">Ratio</small>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" class="form-control form-control-sm" placeholder="Description"
+                               value="${ratio.description}"
+                               onchange="updateEditEnhancedRatio(${groupId}, ${ratio.id}, 'description', this.value)">
+                        <small class="text-muted">Description</small>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" class="form-control form-control-sm" min="0"
+                               value="${ratio.requires_teachers}"
+                               onchange="updateEditEnhancedRatio(${groupId}, ${ratio.id}, 'requires_teachers', this.value)">
+                        <small class="text-muted">Teachers</small>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" class="form-control form-control-sm" min="0"
+                               value="${ratio.requires_aides}"
+                               onchange="updateEditEnhancedRatio(${groupId}, ${ratio.id}, 'requires_aides', this.value)">
+                        <small class="text-muted">Aides</small>
+                    </div>
+                    <div class="col-md-1">
+                        <input type="number" class="form-control form-control-sm" min="0"
+                               value="${ratio.aide_min_ece_units}"
+                               onchange="updateEditEnhancedRatio(${groupId}, ${ratio.id}, 'aide_min_ece_units', this.value)">
+                        <small class="text-muted">ECE</small>
+                    </div>
+                    <div class="col-md-1 text-end">
+                        <button type="button" class="btn btn-sm btn-danger" onclick="removeEditEnhancedRatio(${groupId}, ${ratio.id})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    updateEditHiddenField(groupId);
+}
+
+function updateEditHiddenField(groupId) {
+    const ratios = (editEnhancedRatios[groupId] || []).map(r => ({
+        ratio: r.ratio,
+        description: r.description,
+        requires_teachers: r.requires_teachers,
+        requires_aides: r.requires_aides,
+        aide_min_ece_units: r.aide_min_ece_units
+    }));
+    document.getElementById('edit_enhanced_ratios_json_' + groupId).value = JSON.stringify(ratios);
+}
+
+// Initialize edit modals with existing data when opened
+{% for group in age_groups %}
+document.getElementById('editAgeGroupModal{{ group.id }}').addEventListener('shown.bs.modal', function () {
+    const groupId = {{ group.id }};
+    try {
+        const existing = JSON.parse('{{ group.enhanced_ratios|default("[]", true)|e }}');
+        editEnhancedRatios[groupId] = existing.map((r, i) => ({...r, id: i}));
+        editCounters[groupId] = existing.length;
+    } catch(e) {
+        editEnhancedRatios[groupId] = [];
+        editCounters[groupId] = 0;
+    }
+    renderEditEnhancedRatios(groupId);
+});
+{% endfor %}
 </script>
 {% endblock %}

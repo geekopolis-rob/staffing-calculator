@@ -92,27 +92,22 @@
 
         <!-- Enrollment Breakdown -->
         <h6 class="mb-2">Enrollment Breakdown</h6>
+        {% set badge_colors = ['bg-warning text-dark', 'bg-info', 'bg-success', 'bg-primary', 'bg-danger', 'bg-secondary'] %}
         <div class="row mb-3">
-            <div class="col-md-6">
+            {% for ag in age_groups %}
+            <div class="col-md-{{ 12 // [age_groups|length, 3]|max }}">
                 <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2">
-                    <span><strong>Infants</strong> <small class="text-muted">(0-18 months)</small></span>
+                    <span><strong>{{ ag.name.split('(')[0]|trim }}</strong> <small class="text-muted">({{ ag.required_ratio }})</small></span>
                     <span>
-                        <span class="badge bg-warning text-dark">{{ capacity_data.schedule_summary.core.infants }} Core</span>
-                        <span class="badge bg-danger">{{ capacity_data.schedule_summary.extended.infants }} Extended</span>
-                        <strong class="ms-2">{{ capacity_data.schedule_summary.core.infants + capacity_data.schedule_summary.extended.infants }} total</strong>
+                        {% set core_count = capacity_data.schedule_summary.core.get(ag.id, 0) %}
+                        {% set ext_count = capacity_data.schedule_summary.extended.get(ag.id, 0) %}
+                        <span class="badge {{ badge_colors[loop.index0 % badge_colors|length] }}">{{ core_count }} Core</span>
+                        <span class="badge bg-dark">{{ ext_count }} Extended</span>
+                        <strong class="ms-2">{{ core_count + ext_count }} total</strong>
                     </span>
                 </div>
             </div>
-            <div class="col-md-6">
-                <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2">
-                    <span><strong>Children</strong> <small class="text-muted">(2+ years)</small></span>
-                    <span>
-                        <span class="badge bg-info">{{ capacity_data.schedule_summary.core.children }} Core</span>
-                        <span class="badge bg-success">{{ capacity_data.schedule_summary.extended.children }} Extended</span>
-                        <strong class="ms-2">{{ capacity_data.schedule_summary.core.children + capacity_data.schedule_summary.extended.children }} total</strong>
-                    </span>
-                </div>
-            </div>
+            {% endfor %}
         </div>
 
         <!-- Daily Attendance -->
@@ -230,11 +225,8 @@
                         {% for enr in day.children_detail %}
                         {% set left = ((enr.start_minutes - earliest) / total_mins * 100)|round(1) %}
                         {% set width = ((enr.end_minutes - enr.start_minutes) / total_mins * 100)|round(1) %}
-                        {% if enr.age_group_type == 'infant' %}
-                            {% set color = '#ffc107' if enr.schedule_type == 'core' else '#dc3545' %}
-                        {% else %}
-                            {% set color = '#0dcaf0' if enr.schedule_type == 'core' else '#198754' %}
-                        {% endif %}
+                        {% set timeline_colors = ['#ffc107', '#0dcaf0', '#198754', '#0d6efd', '#dc3545', '#6c757d'] %}
+                        {% set color = timeline_colors[loop.index0 % timeline_colors|length] %}
                         <div class="position-relative" style="height: 24px; margin-bottom: 4px;">
                             <div style="position: absolute; left: {{ left }}%; width: {{ width }}%; height: 100%; background: {{ color }}; border-radius: 3px; padding: 2px 6px; font-size: 0.7rem; color: {% if color in ['#ffc107', '#0dcaf0'] %}#212529{% else %}white{% endif %}; overflow: hidden; white-space: nowrap;">
                                 <strong>{{ enr.count }}</strong> {{ enr.age_group }} {{ enr.schedule_type|title }}
