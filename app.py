@@ -1020,18 +1020,24 @@ def calculate_capacity_plan(age_mix, schedule_mix, days_mix, total_children):
                 'hours': CORE_SHIFT_HOURS,
                 'schedule': '8:30am - 3:30pm',
                 'staff_needed': core_positions,
+                'infant_staff': core_infant_staff,
+                'child_staff': core_child_staff,
                 'note': 'Single shift (under 8hr OT threshold)'
             },
             'extended_am': {
                 'hours': EXTENDED_AM_HOURS,
                 'schedule': '7:00am - 1:00pm',
                 'staff_needed': extended_positions_per_shift,
+                'infant_staff': extended_infant_staff,
+                'child_staff': extended_child_staff,
                 'note': 'Morning shift'
             },
             'extended_pm': {
                 'hours': EXTENDED_PM_HOURS,
                 'schedule': '12:30pm - 6:00pm',
                 'staff_needed': extended_positions_per_shift,
+                'infant_staff': extended_infant_staff,
+                'child_staff': extended_child_staff,
                 'note': 'Afternoon shift (30-min overlap for handoff)'
             }
         },
@@ -1052,6 +1058,37 @@ def calculate_capacity_plan(age_mix, schedule_mix, days_mix, total_children):
         }
     }
 
+    # Build detailed labor breakdown by role and shift
+    labor_breakdown = []
+    breakdown_rows = [
+        ('Core Infant Teachers', '8:30am - 3:30pm', core_infant_staff, CORE_SHIFT_HOURS),
+        ('Core Child Teachers', '8:30am - 3:30pm', core_child_staff, CORE_SHIFT_HOURS),
+        ('Extended AM Infant Teachers', '7:00am - 1:00pm', extended_infant_staff, EXTENDED_AM_HOURS),
+        ('Extended AM Child Teachers', '7:00am - 1:00pm', extended_child_staff, EXTENDED_AM_HOURS),
+        ('Extended PM Infant Teachers', '12:30pm - 6:00pm', extended_infant_staff, EXTENDED_PM_HOURS),
+        ('Extended PM Child Teachers', '12:30pm - 6:00pm', extended_child_staff, EXTENDED_PM_HOURS),
+    ]
+    for role, shift, count, hrs_per_day in breakdown_rows:
+        if count > 0:
+            hours_per_week = hrs_per_day * 5
+            weekly_cost = count * hours_per_week * avg_rate
+            monthly_cost = weekly_cost * 4.33
+            labor_breakdown.append({
+                'role': role,
+                'shift': shift,
+                'count': count,
+                'hours_per_day': hrs_per_day,
+                'hours_per_week': round(hours_per_week, 1),
+                'hourly_rate': round(avg_rate, 2),
+                'weekly_cost': round(weekly_cost, 2),
+                'monthly_cost': round(monthly_cost, 2)
+            })
+
+    labor_breakdown_totals = {
+        'total_weekly': round(sum(r['weekly_cost'] for r in labor_breakdown), 2),
+        'total_monthly': round(sum(r['monthly_cost'] for r in labor_breakdown), 2)
+    }
+
     return {
         'inputs': {
             'total_children': total_children,
@@ -1063,8 +1100,98 @@ def calculate_capacity_plan(age_mix, schedule_mix, days_mix, total_children):
         'daily_attendance': daily_attendance,
         'schedule_summary': schedule_summary,
         'staff_requirements': staff_requirements,
-        'labor_costs': labor_costs
+        'labor_costs': labor_costs,
+        'labor_breakdown': labor_breakdown,
+        'labor_breakdown_totals': labor_breakdown_totals
     }
+
+
+def sync_projected_staff(capacity_data):
+    """
+    Ensure the staff roster has enough qualified teachers to meet enrollment ratios.
+    Adds staff when there's a gap, removes auto-named staff when there's excess.
+    Preserves manually-renamed staff.
+    """
+    labor_costs = capacity_data.get('labor_costs', {})
+    avg_teacher_rate = labor_costs.get('available_staff', {}).get('avg_teacher_rate', 25.00)
+
+    # Total unique teachers needed (not positions — a teacher on core shift is 1 person)
+    # Core staff work one shift, extended staff work AM or PM (2 people per position)
+    positions = labor_costs.get('positions', {})
+    shifts = labor_costs.get('shifts', {})
+
+    # Infant teachers needed: core infant + extended infant per shift
+    core_infant = shifts.get('core', {}).get('infant_staff', 0)
+    ext_infant = shifts.get('extended_am', {}).get('infant_staff', 0)
+    # Extended AM and PM are different people, so total extended infant = per_shift * 2
+    infant_needed = core_infant + (ext_infant * 2)
+
+    # Child teachers needed: same logic
+    core_child = shifts.get('core', {}).get('child_staff', 0)
+    ext_child = shifts.get('extended_am', {}).get('child_staff', 0)
+    child_needed = core_child + (ext_child * 2)
+
+    # Count existing qualified staff
+    all_staff = StaffMember.query.filter_by(is_available=True).all()
+    existing_infant = [s for s in all_staff
+                       if s.has_infant_specialization
+                       and PERMIT_LEVELS.get(s.permit_level, {}).get('rank', 0) >= 3]
+    existing_child = [s for s in all_staff
+                      if not s.has_infant_specialization
+                      and PERMIT_LEVELS.get(s.permit_level, {}).get('rank', 0) >= 3]
+
+    # Sync infant teachers
+    _sync_staff_group(existing_infant, infant_needed, 'Infant Teacher', avg_teacher_rate,
+                      has_infant_specialization=True)
+
+    # Sync child teachers
+    _sync_staff_group(existing_child, child_needed, 'Child Teacher', avg_teacher_rate,
+                      has_infant_specialization=False)
+
+    db.session.commit()
+
+
+def _sync_staff_group(existing, needed, name_prefix, hourly_rate, has_infant_specialization):
+    """Add or remove auto-named staff to match the needed count."""
+    import re
+    current_count = len(existing)
+    gap = needed - current_count
+
+    if gap > 0:
+        # Need more staff — find the next sequential number
+        pattern = re.compile(rf'^{re.escape(name_prefix)} (\d+)$')
+        existing_numbers = []
+        for s in existing:
+            m = pattern.match(s.name)
+            if m:
+                existing_numbers.append(int(m.group(1)))
+        next_num = max(existing_numbers, default=0) + 1
+
+        for i in range(gap):
+            staff = StaffMember(
+                name=f"{name_prefix} {next_num + i}",
+                permit_level='Teacher',
+                is_available=True,
+                hourly_rate=hourly_rate,
+                has_infant_specialization=has_infant_specialization,
+                is_fully_qualified=True,
+                is_director=False,
+                director_counts_toward_ratio=False
+            )
+            db.session.add(staff)
+
+    elif gap < 0:
+        # Too many staff — remove auto-named ones first (highest ID first)
+        pattern = re.compile(rf'^{re.escape(name_prefix)} \d+$')
+        auto_named = sorted(
+            [s for s in existing if pattern.match(s.name)],
+            key=lambda s: s.id,
+            reverse=True
+        )
+        to_remove = min(abs(gap), len(auto_named))
+        for i in range(to_remove):
+            db.session.delete(auto_named[i])
+
 
 def calculate_daily_labor(core_infants, core_children, extended_infants, extended_children):
     """
@@ -2324,6 +2451,11 @@ def calculate_projections():
     days_mix = settings.get_days_mix()
     capacity_data = calculate_capacity_plan(age_mix, schedule_mix, days_mix, settings.total_children)
     labor_monthly = capacity_data.get('labor_costs', {}).get('costs', {}).get('monthly', 0)
+    labor_breakdown = capacity_data.get('labor_breakdown', [])
+    labor_breakdown_totals = capacity_data.get('labor_breakdown_totals', {})
+
+    # Sync staff roster to match enrollment requirements
+    sync_projected_staff(capacity_data)
 
     # Total expenses
     total_expenses = labor_monthly + total_fixed + total_variable
@@ -2382,7 +2514,9 @@ def calculate_projections():
             'total': round(total_expenses, 2),
             'fixed_by_category': {k: round(v, 2) for k, v in fixed_by_category.items()},
             'variable_breakdown': variable_breakdown,
-            'per_child': round(cost_per_child, 2)
+            'per_child': round(cost_per_child, 2),
+            'labor_breakdown': labor_breakdown,
+            'labor_breakdown_totals': labor_breakdown_totals
         },
         'metrics': {
             'labor_pct_of_revenue': round(labor_pct_of_revenue, 1),

@@ -232,7 +232,53 @@
     </div>
 </div>
 
-<!-- Row 4: Revenue Breakdown -->
+<!-- Row 4: Labor Cost Breakdown -->
+<div class="row">
+    <div class="col-12">
+        <div class="card mb-4 border-warning">
+            <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-person-workspace"></i> Labor Cost Breakdown</h5>
+                <button class="btn btn-sm btn-outline-dark" type="button" data-bs-toggle="collapse" data-bs-target="#laborBreakdown">
+                    <i class="bi bi-chevron-down"></i> Details
+                </button>
+            </div>
+            <div class="collapse show" id="laborBreakdown">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Role</th>
+                                    <th>Shift</th>
+                                    <th class="text-center">Staff</th>
+                                    <th class="text-center">Hrs/Week</th>
+                                    <th class="text-end">Hourly Rate</th>
+                                    <th class="text-end">Weekly Cost</th>
+                                    <th class="text-end">Monthly Cost</th>
+                                </tr>
+                            </thead>
+                            <tbody id="laborBreakdownTable">
+                                <tr><td colspan="7" class="text-muted text-center">Loading...</td></tr>
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr>
+                                    <th colspan="5">Total</th>
+                                    <th class="text-end" id="totalWeeklyLabor">$0</th>
+                                    <th class="text-end" id="totalMonthlyLabor">$0</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <small class="text-muted mt-2 d-block">
+                        <i class="bi bi-info-circle"></i> Monthly = Weekly &times; 4.33 weeks. Staff auto-created to meet enrollment ratios.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row 5: Revenue Breakdown -->
 <div class="row">
     <div class="col-12">
         <div class="card mb-4">
@@ -378,6 +424,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 breakEvenAlert.innerHTML = '<i class="bi bi-x-circle"></i> ' + Math.abs(margin) + ' children below break-even';
                 progressBar.classList.remove('bg-warning', 'bg-success');
                 progressBar.classList.add('bg-danger');
+            }
+
+            // Labor cost breakdown table
+            const laborTable = document.getElementById('laborBreakdownTable');
+            if (data.expenses.labor_breakdown && data.expenses.labor_breakdown.length > 0) {
+                laborTable.innerHTML = data.expenses.labor_breakdown.map(item => `
+                    <tr>
+                        <td>${item.role}</td>
+                        <td><small class="text-muted">${item.shift}</small></td>
+                        <td class="text-center">${item.count}</td>
+                        <td class="text-center">${item.hours_per_week}</td>
+                        <td class="text-end">${formatAccounting(item.hourly_rate)}</td>
+                        <td class="text-end">${formatAccountingRound(item.weekly_cost)}</td>
+                        <td class="text-end">${formatAccountingRound(item.monthly_cost)}</td>
+                    </tr>
+                `).join('');
+                document.getElementById('totalWeeklyLabor').textContent =
+                    formatAccountingRound(data.expenses.labor_breakdown_totals.total_weekly);
+                document.getElementById('totalMonthlyLabor').textContent =
+                    formatAccountingRound(data.expenses.labor_breakdown_totals.total_monthly);
+            } else {
+                laborTable.innerHTML = '<tr><td colspan="7" class="text-muted text-center">No labor data</td></tr>';
             }
 
             // Revenue breakdown table
